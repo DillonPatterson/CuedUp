@@ -17,7 +17,7 @@ Local file-based multi-LLM orchestration for the CuedUp repo. This tool stays ou
 
 ## Default models
 
-- Anthropic: `claude-sonnet-4-6`
+- Anthropic: `claude-sonnet-4-20250514`
 - OpenAI: `gpt-4o`
 - Gemini: `gemini-2.5-pro`
 

@@ -330,9 +330,9 @@ def validate_adapter_configs(config: dict, dry_run: bool) -> list[str]:
                     model=model,
                 )
             )
-        if provider == "anthropic" and model == "claude-sonnet-4-20250514":
+        if provider == "anthropic" and model == "claude-sonnet-4-6":
             raise ValueError(
-                "Adapter `{name}` is pinned to an old Anthropic snapshot. Use the current supported ID such as `claude-sonnet-4-6`.".format(
+                "Adapter `{name}` is using `claude-sonnet-4-6`, which is not a valid Anthropic API model ID. Use the current snapshot ID such as `claude-sonnet-4-20250514`.".format(
                     name=name
                 )
             )

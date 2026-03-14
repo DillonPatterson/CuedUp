@@ -41,6 +41,12 @@ FALLBACK_FILES = [
     "lib/mock/fixtures/thread-revisit-later.json",
     "lib/mock/interview-session.ts",
 ]
+DOMAIN_EVIDENCE_PREFIXES = (
+    "lib/state/",
+    "lib/live/",
+    "components/live/",
+    "lib/mock/fixtures/",
+)
 
 
 def run_git_command(repo_root: Path, *args: str) -> str:
@@ -83,6 +89,40 @@ def _excerpt_limits_for_path(path: Path) -> dict[str, int]:
         path.as_posix(),
         {"max_lines": 80, "max_chars": 4_000},
     )
+
+
+def _extract_content_for_path(path: Path, repo_root: Path) -> tuple[str, bool, str]:
+    relative_path = path.relative_to(repo_root).as_posix()
+    content = path.read_text(encoding="utf-8", errors="replace")
+    limits = _excerpt_limits_for_path(Path(relative_path))
+
+    if relative_path == "lib/state/conversation-engine.ts":
+        lines = content.splitlines()
+        target_index = next(
+            (
+                index
+                for index, line in enumerate(lines)
+                if "export function processTranscriptTurn" in line
+            ),
+            0,
+        )
+        start = max(0, target_index - 120)
+        end = min(len(lines), target_index + 220)
+        sliced_content = "\n".join(lines[start:end])
+        excerpt, truncated = _truncate_text(
+            sliced_content,
+            max_lines=limits["max_lines"] + 120,
+            max_chars=limits["max_chars"] + 4_000,
+        )
+        note = "targeted slice around processTranscriptTurn"
+        return excerpt, truncated or start > 0 or end < len(lines), note
+
+    excerpt, truncated = _truncate_text(
+        content,
+        max_lines=limits["max_lines"],
+        max_chars=limits["max_chars"],
+    )
+    return excerpt, truncated, "top-of-file excerpt"
 
 
 def _parse_changed_files(status_output: str) -> list[dict[str, str]]:
@@ -148,32 +188,51 @@ def _collect_selected_files(
         if len(selected_paths) >= 4:
             break
 
-    if not selected_paths:
-        for relative_path in FALLBACK_FILES:
-            candidate = repo_root / relative_path
-            if (
-                candidate.exists()
-                and candidate.is_file()
-                and _is_text_file(candidate)
-                and _is_evidence_file(candidate)
-            ):
-                selected_paths.append(candidate)
-        selected_paths = selected_paths[:4]
+    selected_relative_paths = {
+        path.relative_to(repo_root).as_posix() for path in selected_paths
+    }
+    has_domain_evidence = any(
+        relative_path.startswith(DOMAIN_EVIDENCE_PREFIXES)
+        for relative_path in selected_relative_paths
+    )
+
+    for relative_path in FALLBACK_FILES:
+        candidate = repo_root / relative_path
+        if (
+            not candidate.exists()
+            or not candidate.is_file()
+            or not _is_text_file(candidate)
+            or not _is_evidence_file(candidate)
+            or relative_path in selected_relative_paths
+        ):
+            continue
+
+        if len(selected_paths) < 4:
+            selected_paths.append(candidate)
+            selected_relative_paths.add(relative_path)
+            has_domain_evidence = has_domain_evidence or relative_path.startswith(
+                DOMAIN_EVIDENCE_PREFIXES
+            )
+            continue
+
+        if not has_domain_evidence:
+            selected_paths[-1] = candidate
+            selected_relative_paths = {
+                path.relative_to(repo_root).as_posix() for path in selected_paths
+            }
+            has_domain_evidence = True
+            break
 
     excerpts: list[dict[str, str]] = []
     for path in selected_paths:
         relative_path = path.relative_to(repo_root).as_posix()
-        limits = _excerpt_limits_for_path(Path(relative_path))
-        content, is_truncated = _truncate_text(
-            path.read_text(encoding="utf-8", errors="replace"),
-            max_lines=limits["max_lines"],
-            max_chars=limits["max_chars"],
-        )
+        content, is_truncated, selection_mode = _extract_content_for_path(path, repo_root)
         excerpts.append(
             {
                 "path": relative_path,
                 "content": content,
                 "truncated": "yes" if is_truncated else "no",
+                "selection_mode": selection_mode,
             }
         )
     return excerpts
@@ -217,15 +276,16 @@ def gather_repo_context(repo_root: Path) -> dict:
     changed_files = _parse_changed_files(
         run_git_command(repo_root, "status", "--short", "--untracked-files=all")
     )
+    selected_file_contents = _collect_selected_files(repo_root, changed_files)
 
     return {
         "branch": branch,
         "latest_commit": latest_commit,
         "changed_files": changed_files,
         "compact_tree": _build_compact_tree(repo_root),
-        "selected_file_contents": _collect_selected_files(repo_root, changed_files),
+        "selected_file_contents": selected_file_contents,
         "diff_snippets": _collect_diff_snippets(repo_root, changed_files),
-        "selected_file_count": len(_collect_selected_files(repo_root, changed_files)),
+        "selected_file_count": len(selected_file_contents),
     }
 
 
@@ -280,6 +340,7 @@ def render_repo_context(context: dict) -> str:
                 [
                     f"### {file_info['path']}",
                     "",
+                    f"- Selection: {file_info['selection_mode']}",
                     f"- Inclusion: {'truncated excerpt' if file_info['truncated'] == 'yes' else 'full excerpt within bounds'}",
                     "",
                     "```text",
