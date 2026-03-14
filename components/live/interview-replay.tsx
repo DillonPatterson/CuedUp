@@ -4,10 +4,12 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import type { DossierLiveHandoff, TranscriptTurn } from "@/types";
 import { NudgeRail } from "@/components/live/nudge-rail";
 import { PresenceDecisionLog } from "@/components/live/presence-decision-log";
+import { ReplayTranscriptInput } from "@/components/live/replay-transcript-input";
 import { ThreadBank } from "@/components/live/thread-bank";
 import { TopicMap } from "@/components/live/topic-map";
 import { TranscriptPanel } from "@/components/live/transcript-panel";
 import { buildInterviewSessionTimeline } from "@/lib/state/interview-session-timeline";
+import { appendManualTranscriptTurn } from "@/lib/transcript/manual-turns";
 
 type InterviewReplayProps = {
   displaySessionId: string;
@@ -27,9 +29,15 @@ export function InterviewReplay({
   handoff,
   transcriptTurns,
 }: InterviewReplayProps) {
+  const [workingTranscriptTurns, setWorkingTranscriptTurns] = useState(transcriptTurns);
   const timeline = useMemo(
-    () => buildInterviewSessionTimeline(engineSessionId, handoff, transcriptTurns),
-    [engineSessionId, handoff, transcriptTurns],
+    () =>
+      buildInterviewSessionTimeline(
+        engineSessionId,
+        handoff,
+        workingTranscriptTurns,
+      ),
+    [engineSessionId, handoff, workingTranscriptTurns],
   );
   const [currentSnapshotIndex, setCurrentSnapshotIndex] = useState(INITIAL_SNAPSHOT_INDEX);
   const [isAutoplaying, setIsAutoplaying] = useState(false);
@@ -88,6 +96,22 @@ export function InterviewReplay({
     setIsAutoplaying((value) => !value);
   }
 
+  function handleAppendTurn(
+    draft: Parameters<typeof appendManualTranscriptTurn>[2],
+  ) {
+    const nextTurns = appendManualTranscriptTurn(
+      workingTranscriptTurns,
+      engineSessionId,
+      draft,
+    );
+
+    startTransition(() => {
+      setWorkingTranscriptTurns(nextTurns);
+      setCurrentSnapshotIndex(nextTurns.length);
+      setIsAutoplaying(false);
+    });
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1.6fr_0.95fr]">
       <TranscriptPanel
@@ -96,7 +120,7 @@ export function InterviewReplay({
         recentTurns={currentSnapshot.recentTurns}
         currentTurn={currentSnapshot.currentTurn}
         currentTurnIndex={currentTurnIndex}
-        totalTurns={transcriptTurns.length}
+        totalTurns={workingTranscriptTurns.length}
         onNext={handleNext}
         onPrevious={handlePrevious}
         onReset={handleReset}
@@ -125,6 +149,7 @@ export function InterviewReplay({
         currentDecision={currentSnapshot.decisionLogEntry}
         recentDecisions={recentDecisions}
       />
+      <ReplayTranscriptInput onAppend={handleAppendTurn} />
     </div>
   );
 }
