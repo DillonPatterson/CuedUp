@@ -12,6 +12,7 @@ import { replayFixtures } from "@/lib/mock/replay-fixtures";
 import { buildInterviewSessionTimeline } from "@/lib/state/interview-session-timeline";
 import {
   appendManualTranscriptTurn,
+  importReplayTranscriptTurnDrafts,
   importReplayTranscriptTurns,
 } from "@/lib/transcript/manual-turns";
 
@@ -144,11 +145,18 @@ export function InterviewReplay({
       return;
     }
 
-    const nextTurns = importReplayTranscriptTurns([], engineSessionId, fixture.rawTranscript);
+    const nextTurns = importReplayTranscriptTurnDrafts(
+      [],
+      engineSessionId,
+      fixture.transcript,
+    );
 
     startTransition(() => {
       setReplayLocalTurns(nextTurns);
-      setCurrentSnapshotIndex(INITIAL_SNAPSHOT_INDEX);
+      // `snapshots[0]` is the seeded pre-turn snapshot and `snapshots[i]`
+      // corresponds to `turns[i - 1]`, so `nextTurns.length` lands on the
+      // snapshot produced by the last loaded fixture turn.
+      setCurrentSnapshotIndex(nextTurns.length);
       setIsAutoplaying(false);
     });
   }
@@ -156,6 +164,8 @@ export function InterviewReplay({
   function handleResetToSeededSession() {
     startTransition(() => {
       setReplayLocalTurns(transcriptTurns);
+      // Reset-to-seeded intentionally goes back to the empty pre-turn snapshot,
+      // unlike fixture loads, so replay starts again from the canonical seed.
       setCurrentSnapshotIndex(INITIAL_SNAPSHOT_INDEX);
       setIsAutoplaying(false);
     });

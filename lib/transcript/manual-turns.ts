@@ -102,9 +102,19 @@ export function importReplayTranscriptTurns(
   sessionId: string,
   rawTranscript: string,
 ) {
-  const parsedTranscript = replayImportedTranscriptSchema.parse(
+  return importReplayTranscriptTurnDrafts(
+    turns,
+    sessionId,
     JSON.parse(rawTranscript),
   );
+}
+
+export function importReplayTranscriptTurnDrafts(
+  turns: TranscriptTurn[],
+  sessionId: string,
+  transcriptDrafts: unknown,
+) {
+  const parsedTranscript = replayImportedTranscriptSchema.parse(transcriptDrafts);
 
   // Imported turns intentionally reuse the same replay-local append path as
   // hand-entered turns so seeded mock turns remain distinct from replay-local

@@ -5,23 +5,23 @@ import threadRevisitLater from "@/lib/mock/fixtures/thread-revisit-later.json";
 export type ReplayFixtureDefinition = {
   id: string;
   label: string;
-  rawTranscript: string;
+  transcript: unknown;
 };
 
 export const replayFixtures: ReplayFixtureDefinition[] = [
   {
     id: "thread-revisit-later",
     label: "thread-revisit-later",
-    rawTranscript: JSON.stringify(threadRevisitLater, null, 2),
+    transcript: threadRevisitLater,
   },
   {
     id: "evasive-run-pressure",
     label: "evasive-run-pressure",
-    rawTranscript: JSON.stringify(evasiveRunPressure, null, 2),
+    transcript: evasiveRunPressure,
   },
   {
     id: "saturation-plateau-repeat",
     label: "saturation-plateau-repeat",
-    rawTranscript: JSON.stringify(saturationPlateauRepeat, null, 2),
+    transcript: saturationPlateauRepeat,
   },
 ];
