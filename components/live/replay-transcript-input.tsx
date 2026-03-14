@@ -6,6 +6,7 @@ import type { ManualTranscriptTurnDraft } from "@/lib/transcript/manual-turns";
 
 type ReplayTranscriptInputProps = {
   onAppend: (draft: ManualTranscriptTurnDraft) => void;
+  onImport: (rawTranscript: string) => void;
 };
 
 const initialDraft: ManualTranscriptTurnDraft = {
@@ -27,8 +28,11 @@ const speakerOptions: TranscriptTurn["speaker"][] = [
 
 export function ReplayTranscriptInput({
   onAppend,
+  onImport,
 }: ReplayTranscriptInputProps) {
   const [draft, setDraft] = useState(initialDraft);
+  const [rawTranscript, setRawTranscript] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -57,6 +61,40 @@ export function ReplayTranscriptInput({
       ...currentDraft,
       [key]: Number.isFinite(nextValue) ? nextValue : 0,
     }));
+  }
+
+  function handleImportSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    try {
+      onImport(rawTranscript);
+      setLoadError(null);
+      setRawTranscript("");
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Unable to load transcript.",
+      );
+    }
+  }
+
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      onImport(await file.text());
+      setLoadError(null);
+      setRawTranscript("");
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Unable to load transcript.",
+      );
+    } finally {
+      event.target.value = "";
+    }
   }
 
   return (
@@ -173,6 +211,52 @@ export function ReplayTranscriptInput({
           className="rounded-full bg-amber-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-800"
         >
           Append turn
+        </button>
+      </form>
+
+      <form className="mt-8 space-y-4" onSubmit={handleImportSubmit}>
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">
+            Load transcript
+          </p>
+          <p className="mt-2 text-sm text-stone-600">
+            JSON array of transcript-turn-like objects.
+          </p>
+        </div>
+
+        <label className="block">
+          <span className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">
+            Paste JSON
+          </span>
+          <textarea
+            value={rawTranscript}
+            onChange={(event) => setRawTranscript(event.target.value)}
+            rows={6}
+            className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">
+            Or upload file
+          </span>
+          <input
+            type="file"
+            accept=".json,application/json,text/json"
+            onChange={handleFileChange}
+            className="mt-2 block w-full text-sm text-stone-700"
+          />
+        </label>
+
+        {loadError ? (
+          <p className="text-sm text-rose-700">{loadError}</p>
+        ) : null}
+
+        <button
+          type="submit"
+          className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+        >
+          Load transcript
         </button>
       </form>
     </section>

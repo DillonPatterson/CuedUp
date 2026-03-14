@@ -9,7 +9,10 @@ import { ThreadBank } from "@/components/live/thread-bank";
 import { TopicMap } from "@/components/live/topic-map";
 import { TranscriptPanel } from "@/components/live/transcript-panel";
 import { buildInterviewSessionTimeline } from "@/lib/state/interview-session-timeline";
-import { appendManualTranscriptTurn } from "@/lib/transcript/manual-turns";
+import {
+  appendManualTranscriptTurn,
+  importReplayTranscriptTurns,
+} from "@/lib/transcript/manual-turns";
 
 type InterviewReplayProps = {
   displaySessionId: string;
@@ -119,6 +122,20 @@ export function InterviewReplay({
     });
   }
 
+  function handleImportTranscript(rawTranscript: string) {
+    const nextTurns = importReplayTranscriptTurns(
+      replayLocalTurns,
+      engineSessionId,
+      rawTranscript,
+    );
+
+    startTransition(() => {
+      setReplayLocalTurns(nextTurns);
+      setCurrentSnapshotIndex(nextTurns.length);
+      setIsAutoplaying(false);
+    });
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1.6fr_0.95fr]">
       <TranscriptPanel
@@ -156,7 +173,10 @@ export function InterviewReplay({
         currentDecision={currentSnapshot.decisionLogEntry}
         recentDecisions={recentDecisions}
       />
-      <ReplayTranscriptInput onAppend={handleAppendTurn} />
+      <ReplayTranscriptInput
+        onAppend={handleAppendTurn}
+        onImport={handleImportTranscript}
+      />
     </div>
   );
 }
