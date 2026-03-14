@@ -75,22 +75,26 @@ def build_final_report(
             sections.append(f"- `{result.name}` skipped: {result.text_output}")
         sections.append("")
 
+    completed_review_results = [
+        result for result in results if result.status not in {"skipped"}
+    ]
+
     sections.extend(
         [
-        "## Task",
-        "",
-        task_description,
-        "",
-        "## Repo Context",
-        "",
-        repo_context_markdown.strip(),
-        "",
-        "## Model Summaries",
-        "",
+            "## Task",
+            "",
+            task_description,
+            "",
+            "## Repo Context",
+            "",
+            repo_context_markdown.strip(),
+            "",
+            "## Completed Model Summaries",
+            "",
         ]
     )
 
-    for result in results:
+    for result in completed_review_results:
         sections.extend(
             [
                 f"### {result.name}",

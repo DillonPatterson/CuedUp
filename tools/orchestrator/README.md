@@ -15,6 +15,14 @@ Local file-based multi-LLM orchestration for the CuedUp repo. This tool stays ou
 - `GEMINI_API_KEY`
 - `CODEX_CLI_COMMAND` optional, used only for the Codex stub suggestion
 
+## Default models
+
+- Anthropic: `claude-sonnet-4-6`
+- OpenAI: `gpt-5.2`
+- Gemini: `gemini-2.5-pro`
+
+You can override these in [tools/orchestrator/config/pipeline.json](C:\Users\dillo\Desktop\CuedUp\tools\orchestrator\config\pipeline.json) if your account or provider setup requires different valid model IDs.
+
 ## Dry-run
 
 ```bash
@@ -36,8 +44,9 @@ python tools/orchestrator/run.py --task "Review the current replay/debug toolcha
 ## What it does
 
 - gathers basic repo context
+- keeps repo evidence partial, filtered, and inspectable
 - assembles prompts from config and templates
-- runs adapters in this order: Codex, Claude, GPT 5.4, Gemini 3 Pro
+- runs adapters in this order: Codex, Claude, OpenAI GPT, Gemini
 - saves prompts, raw responses, summaries, and a final report into a timestamped run folder
 
 ## Current limitations
@@ -50,4 +59,4 @@ python tools/orchestrator/run.py --task "Review the current replay/debug toolcha
 
 ## Codex in v1
 
-The Codex adapter does not execute Codex directly yet. In dry-run it records a stub result. In live mode it still records a stub result plus a suggested CLI command and TODO note so the next integration step is explicit.
+The Codex adapter does not execute Codex directly yet. It is recorded as skipped and is not treated as a completed reviewing model in the final report.

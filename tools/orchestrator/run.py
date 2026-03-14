@@ -56,14 +56,12 @@ def main() -> int:
         },
     )
     write_text(run_dir / "repo-context.md", repo_context_markdown)
-    if repo_context["agents_guidance"]:
-        write_text(run_dir / "agents-guidance.md", repo_context["agents_guidance"])
 
     results: list[AdapterResult] = []
     adapters = build_adapters(config)
 
     for index, adapter in enumerate(adapters, start=1):
-        if not args.dry_run and not adapter.supports_live_execution():
+        if not adapter.supports_live_execution():
             results.append(
                 adapter.build_skipped_result(
                     "Adapter is configured but not wired for live execution in v1."

@@ -29,11 +29,12 @@ TEXT_EXTENSIONS = {
 }
 NON_EVIDENCE_FILES = {"AGENTS.md"}
 FALLBACK_FILES = [
-    "package.json",
-    "README.md",
-    "app/page.tsx",
-    "app/layout.tsx",
-    "tools/orchestrator/run.py",
+    "lib/state/conversation-engine.ts",
+    "lib/live/presence-guard.ts",
+    "lib/state/interview-session-timeline.ts",
+    "components/live/interview-replay.tsx",
+    "lib/mock/fixtures/thread-revisit-later.json",
+    "lib/mock/interview-session.ts",
 ]
 
 
@@ -194,14 +195,11 @@ def gather_repo_context(repo_root: Path) -> dict:
     changed_files = _parse_changed_files(
         run_git_command(repo_root, "status", "--short", "--untracked-files=all")
     )
-    agents_path = repo_root / "AGENTS.md"
-    agents_guidance = agents_path.read_text(encoding="utf-8") if agents_path.exists() else ""
 
     return {
         "branch": branch,
         "latest_commit": latest_commit,
         "changed_files": changed_files,
-        "agents_guidance": agents_guidance.strip(),
         "compact_tree": _build_compact_tree(repo_root),
         "selected_file_contents": _collect_selected_files(repo_root, changed_files),
         "diff_snippets": _collect_diff_snippets(repo_root, changed_files),
@@ -213,6 +211,9 @@ def render_repo_context(context: dict) -> str:
         "# Repository Snapshot",
         "",
         f"- Branch: `{context['branch']}`",
+        "- Context scope: partial and bounded",
+        f"- Selected evidence files: {len(context['selected_file_contents'])}",
+        f"- Diff snippets included: {len(context['diff_snippets'])}",
         "",
         "## Latest Commit",
         "",
@@ -242,7 +243,15 @@ def render_repo_context(context: dict) -> str:
     )
 
     if context["selected_file_contents"]:
-        sections.extend(["", "## Selected File Excerpts", ""])
+        sections.extend(
+            [
+                "",
+                "## Selected File Excerpts",
+                "",
+                "Only the files listed below are included as direct evidence. Treat repo understanding as partial outside this set.",
+                "",
+            ]
+        )
         for file_info in context["selected_file_contents"]:
             sections.extend(
                 [
@@ -256,7 +265,14 @@ def render_repo_context(context: dict) -> str:
             )
 
     if context["diff_snippets"]:
-        sections.extend(["## Recent Diff Snippets", ""])
+        sections.extend(
+            [
+                "## Recent Diff Snippets",
+                "",
+                "Diff evidence is partial and limited to a small number of recent changed files.",
+                "",
+            ]
+        )
         for diff_info in context["diff_snippets"]:
             sections.extend(
                 [

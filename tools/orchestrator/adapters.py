@@ -319,6 +319,19 @@ def validate_adapter_configs(config: dict, dry_run: bool) -> list[str]:
                 f"Adapter `{name}` has a suspicious model name `{model}` for provider `{provider}`."
             )
 
+        if provider == "openai" and model == "gpt-5.4":
+            raise ValueError(
+                "Adapter `{name}` is using `gpt-5.4`, which is not a valid current OpenAI model alias.".format(
+                    name=name
+                )
+            )
+        if provider == "gemini" and "3-pro" in model:
+            raise ValueError(
+                "Adapter `{name}` is using a Gemini 3 Pro placeholder name. Use a real Gemini API model such as `gemini-2.5-pro`.".format(
+                    name=name
+                )
+            )
+
         required_env_var = REQUIRED_ENV_VARS.get(provider)
         if not dry_run and required_env_var and not os.environ.get(required_env_var):
             raise ValueError(
@@ -328,6 +341,12 @@ def validate_adapter_configs(config: dict, dry_run: bool) -> list[str]:
         if provider == "codex":
             warnings.append(
                 "Codex is configured but will be skipped until live integration exists."
+            )
+        if provider in {"anthropic", "openai", "gemini"} and any(
+            marker in model for marker in ("preview", "exp")
+        ):
+            warnings.append(
+                f"Adapter `{name}` uses preview/experimental model `{model}`; results may be less stable."
             )
 
     return warnings
