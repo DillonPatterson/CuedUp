@@ -1,0 +1,31 @@
+{
+  "default_task_description": "Review the current CuedUp repository state, identify the most important implementation risks, and suggest the next practical developer actions.",
+  "prompts": {
+    "system_template": "prompts/system/base.md",
+    "task_template": "prompts/tasks/repo-review.md"
+  },
+  "adapters": [
+    {
+      "name": "codex",
+      "provider": "codex",
+      "model": "codex",
+      "cli_command": "codex"
+    },
+    {
+      "name": "claude",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514",
+      "max_tokens": 2048
+    },
+    {
+      "name": "gpt-5.4",
+      "provider": "openai",
+      "model": "gpt-5.4"
+    },
+    {
+      "name": "gemini-3-pro",
+      "provider": "gemini",
+      "model": "gemini-3-pro-preview"
+    }
+  ]
+}
