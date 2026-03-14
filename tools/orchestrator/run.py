@@ -1,9 +1,10 @@
 import argparse
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
-from adapters import AdapterResult, build_adapters
+from adapters import AdapterResult, build_adapters, validate_adapter_configs
 from config_loader import load_env_file, load_pipeline_config
 from prompting import build_prompt
 from repo_context import gather_repo_context, render_repo_context
@@ -37,6 +38,9 @@ def main() -> int:
     load_env_file(repo_root / ".env")
 
     config = load_pipeline_config(base_dir)
+    validation_warnings = validate_adapter_configs(config, args.dry_run)
+    for warning in validation_warnings:
+        print(f"[orchestrator warning] {warning}", file=sys.stderr)
     task_description = args.task or config["default_task_description"]
     repo_context = gather_repo_context(repo_root)
     repo_context_markdown = render_repo_context(repo_context)
@@ -48,15 +52,25 @@ def main() -> int:
             "task_description": task_description,
             "repo_context": repo_context,
             "generated_at": datetime.now().isoformat(),
+            "validation_warnings": validation_warnings,
         },
     )
     write_text(run_dir / "repo-context.md", repo_context_markdown)
+    if repo_context["agents_guidance"]:
+        write_text(run_dir / "agents-guidance.md", repo_context["agents_guidance"])
 
-    prior_summaries = "None yet."
     results: list[AdapterResult] = []
     adapters = build_adapters(config)
 
     for index, adapter in enumerate(adapters, start=1):
+        if not args.dry_run and not adapter.supports_live_execution():
+            results.append(
+                adapter.build_skipped_result(
+                    "Adapter is configured but not wired for live execution in v1."
+                )
+            )
+            continue
+
         prompt = build_prompt(
             base_dir,
             config["prompts"]["system_template"],
@@ -66,8 +80,6 @@ def main() -> int:
                 "run_timestamp": datetime.now().isoformat(),
                 "task_description": task_description,
                 "repo_context": repo_context_markdown,
-                "agents_guidance": repo_context["agents_guidance"] or "None",
-                "prior_summaries": prior_summaries,
                 "model_name": adapter.name,
             },
         )
@@ -98,11 +110,13 @@ def main() -> int:
         write_text(run_dir / f"{file_prefix}.summary.md", result.summary_markdown)
 
         results.append(result)
-        prior_summaries = "\n\n".join(
-            result.summary_markdown.strip() for result in results
-        )
 
-    final_report = build_final_report(task_description, repo_context_markdown, results)
+    final_report = build_final_report(
+        task_description,
+        repo_context_markdown,
+        results,
+        validation_warnings,
+    )
     write_text(run_dir / "final-report.md", final_report)
 
     print(json.dumps({"run_dir": str(run_dir), "dry_run": args.dry_run}, indent=2))

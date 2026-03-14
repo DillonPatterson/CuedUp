@@ -14,14 +14,6 @@ Developer request:
 
 {{repo_context}}
 
-## AGENTS guidance
-
-{{agents_guidance}}
-
-## Prior model summaries
-
-{{prior_summaries}}
-
 ## Output format
 
 Return markdown with these sections:

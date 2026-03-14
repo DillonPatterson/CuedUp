@@ -17,6 +17,20 @@ class AdapterResult:
     summary_markdown: str
 
 
+REQUIRED_ADAPTER_ORDER = ["codex", "anthropic", "openai", "gemini"]
+MODEL_PREFIX_RULES = {
+    "codex": ("codex",),
+    "anthropic": ("claude-",),
+    "openai": ("gpt-", "o"),
+    "gemini": ("gemini-",),
+}
+REQUIRED_ENV_VARS = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+}
+
+
 def _http_post_json(url: str, headers: dict[str, str], payload: dict) -> dict:
     request = urllib.request.Request(
         url,
@@ -53,35 +67,38 @@ class BaseAdapter:
     def call(self, prompt: str, prompt_path: Path, dry_run: bool) -> AdapterResult:
         raise NotImplementedError
 
+    def supports_live_execution(self) -> bool:
+        return True
 
-class CodexAdapter(BaseAdapter):
-    def call(self, prompt: str, prompt_path: Path, dry_run: bool) -> AdapterResult:
-        status = "dry-run" if dry_run else "stub"
-        cli_command = self.config.get("cli_command", "codex")
-        text_output = (
-            "Codex adapter is stubbed in v1. "
-            f"Prompt saved to `{prompt_path.name}`. "
-            f"Next integration step: wire `{cli_command}` or Codex automation non-interactively."
-        )
-        raw_response = {
-            "status": status,
-            "provider": self.provider,
-            "model": self.model,
-            "prompt_path": str(prompt_path),
-            "suggested_command": f"{cli_command} < {prompt_path.name}",
-            "todo": "Implement direct Codex automation in a later step.",
-        }
+    def build_skipped_result(self, reason: str) -> AdapterResult:
         return AdapterResult(
             name=self.name,
             provider=self.provider,
             model=self.model,
-            status=status,
-            text_output=text_output,
-            raw_response=raw_response,
+            status="skipped",
+            text_output=reason,
+            raw_response={"status": "skipped", "reason": reason},
             summary_markdown=_build_summary(
-                self.name, self.provider, self.model, status, text_output
+                self.name,
+                self.provider,
+                self.model,
+                "skipped",
+                reason,
             ),
         )
+
+
+class CodexAdapter(BaseAdapter):
+    def supports_live_execution(self) -> bool:
+        return False
+
+    def call(self, prompt: str, prompt_path: Path, dry_run: bool) -> AdapterResult:
+        cli_command = self.config.get("cli_command", "codex")
+        reason = (
+            "Codex live integration is not wired in v1. "
+            f"Suggested next step: connect `{cli_command}` or a non-interactive Codex automation path."
+        )
+        return self.build_skipped_result(reason)
 
 
 class OpenAIAdapter(BaseAdapter):
@@ -270,3 +287,47 @@ def build_adapters(config: dict) -> list[BaseAdapter]:
         else:
             raise ValueError(f"Unsupported provider: {provider}")
     return adapters
+
+
+def validate_adapter_configs(config: dict, dry_run: bool) -> list[str]:
+    adapters = config.get("adapters")
+    if not isinstance(adapters, list) or not adapters:
+        raise ValueError("Pipeline config must include a non-empty adapters list.")
+
+    provider_order = [adapter.get("provider") for adapter in adapters]
+    if provider_order != REQUIRED_ADAPTER_ORDER:
+        raise ValueError(
+            "Pipeline adapters must be ordered as: "
+            + " -> ".join(REQUIRED_ADAPTER_ORDER)
+        )
+
+    warnings: list[str] = []
+    for adapter in adapters:
+        name = (adapter.get("name") or "").strip()
+        provider = (adapter.get("provider") or "").strip()
+        model = (adapter.get("model") or "").strip()
+
+        if not name:
+            raise ValueError(f"Adapter config is missing a name: {adapter}")
+        if provider not in MODEL_PREFIX_RULES:
+            raise ValueError(f"Unsupported provider: {provider}")
+        if not model:
+            raise ValueError(f"Adapter `{name}` is missing a model name.")
+
+        if not any(model.startswith(prefix) for prefix in MODEL_PREFIX_RULES[provider]):
+            raise ValueError(
+                f"Adapter `{name}` has a suspicious model name `{model}` for provider `{provider}`."
+            )
+
+        required_env_var = REQUIRED_ENV_VARS.get(provider)
+        if not dry_run and required_env_var and not os.environ.get(required_env_var):
+            raise ValueError(
+                f"Adapter `{name}` requires `{required_env_var}` for live runs."
+            )
+
+        if provider == "codex":
+            warnings.append(
+                "Codex is configured but will be skipped until live integration exists."
+            )
+
+    return warnings
