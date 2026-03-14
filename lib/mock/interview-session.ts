@@ -14,6 +14,9 @@ export function getMockInterviewSession() {
 
   const bundle = generateMockDossierBundle(source);
 
+  // Session-aware routing is not implemented yet. Mock interview pages ignore the
+  // URL sessionId on purpose, and every mock session currently resolves to the
+  // same seeded guest/session pair for deterministic development.
   return {
     engineSessionId: MOCK_REPLAY_SESSION_ID,
     guestName: bundle.input.guestName,
