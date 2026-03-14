@@ -26,12 +26,11 @@ export default async function InterviewPage({ params }: InterviewPageProps) {
       <header className="mb-6">
         <p className="eyebrow">Live interview</p>
         <h1 className="text-4xl font-semibold text-stone-900">
-          Session monitor for {sessionId}
+          {bundle.input.guestName} host surface
         </h1>
         <p className="mt-3 max-w-3xl text-stone-700">
-          This view simulates live interview state from the deterministic replay
-          engine. It uses the fixed `test-guest` dossier handoff plus mock
-          transcript turns to show evolving threads, coverage, and next moves.
+          Sparse live mode is the default view. Replay/debug stays available for
+          validation while transcript ingestion is still mocked locally.
         </p>
       </header>
       <InterviewReplay

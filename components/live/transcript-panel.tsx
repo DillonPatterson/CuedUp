@@ -1,10 +1,12 @@
 import type { TranscriptTurn } from "@/types";
 
 type TranscriptPanelProps = {
+  uiMode: "live" | "replay";
   sessionId: string;
   guestName: string;
   recentTurns: TranscriptTurn[];
   currentTurn: TranscriptTurn | null;
+  previousTurn: TranscriptTurn | null;
   currentTurnIndex: number;
   totalTurns: number;
   isAutoplaying: boolean;
@@ -19,10 +21,12 @@ function speakerLabel(speaker: TranscriptTurn["speaker"]) {
 }
 
 export function TranscriptPanel({
+  uiMode,
   sessionId,
   guestName,
   recentTurns,
   currentTurn,
+  previousTurn,
   currentTurnIndex,
   totalTurns,
   isAutoplaying,
@@ -31,6 +35,58 @@ export function TranscriptPanel({
   onReset,
   onAutoplayToggle,
 }: TranscriptPanelProps) {
+  if (uiMode === "live") {
+    return (
+      <section className="panel min-h-80 p-6 md:p-8">
+        <div>
+          <p className="text-sm font-medium uppercase tracking-[0.16em] text-stone-500">
+            {guestName}
+          </p>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          {currentTurn ? (
+            <article className="rounded-3xl border border-stone-200 bg-stone-950 px-5 py-6 text-stone-50">
+              <p className="text-xs uppercase tracking-[0.16em] text-amber-300">
+                Current
+              </p>
+              <div className="mt-3">
+                <span className="rounded-full bg-stone-800 px-3 py-1 text-xs uppercase tracking-[0.14em] text-stone-200">
+                  {speakerLabel(currentTurn.speaker)}
+                </span>
+              </div>
+              <p className="mt-4 text-2xl leading-9 text-stone-50 md:text-3xl md:leading-10">
+                {currentTurn.text}
+              </p>
+            </article>
+          ) : (
+            <article className="rounded-3xl border border-stone-200 bg-stone-50/80 px-5 py-6">
+              <p className="text-lg leading-8 text-stone-700">
+                Waiting for the first turn.
+              </p>
+            </article>
+          )}
+
+          {previousTurn ? (
+            <article className="rounded-3xl border border-stone-200 bg-stone-50/80 px-5 py-5">
+              <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                Previous
+              </p>
+              <div className="mt-3">
+                <span className="rounded-full bg-white px-3 py-1 text-xs uppercase tracking-[0.14em] text-stone-500">
+                  {speakerLabel(previousTurn.speaker)}
+                </span>
+              </div>
+              <p className="mt-4 text-lg leading-8 text-stone-700">
+                {previousTurn.text}
+              </p>
+            </article>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="panel min-h-80 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">

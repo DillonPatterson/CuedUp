@@ -1,19 +1,37 @@
 import type { CandidateNextMove, ConversationMode } from "@/types";
 
 type NudgeRailProps = {
+  uiMode: "live" | "replay";
   sessionId: string;
   currentMode: ConversationMode;
   staleNudgeGuard: boolean;
   candidateNextMoves: CandidateNextMove[];
+  liveCue: string | null;
+  hasCurrentTurn: boolean;
 };
 
 export function NudgeRail({
+  uiMode,
   sessionId,
   currentMode,
   staleNudgeGuard,
   candidateNextMoves,
+  liveCue,
+  hasCurrentTurn,
 }: NudgeRailProps) {
   const primaryMove = candidateNextMoves[0] ?? null;
+
+  if (uiMode === "live") {
+    return (
+      <aside className="panel flex min-h-80 items-center p-6 md:p-8">
+        <div className="w-full">
+          <p className="text-4xl font-semibold leading-tight tracking-tight text-stone-900 md:text-5xl">
+            {liveCue ?? (hasCurrentTurn ? "Hold steady" : "Listen first")}
+          </p>
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <aside className="panel min-h-80 p-6">
