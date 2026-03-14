@@ -1,0 +1,146 @@
+[
+  {
+    "speaker": "host",
+    "text": "You keep returning to the factory town when you explain resilience.",
+    "energyScore": 0.49,
+    "specificityScore": 0.65,
+    "evasionScore": 0.05,
+    "noveltyScore": 0.67,
+    "threadIdLink": "51111111-1111-4111-8111-111111111111"
+  },
+  {
+    "speaker": "guest",
+    "text": "That town taught me systems fail long before leaders admit it.",
+    "energyScore": 0.54,
+    "specificityScore": 0.71,
+    "evasionScore": 0.04,
+    "noveltyScore": 0.64,
+    "threadIdLink": "51111111-1111-4111-8111-111111111111"
+  },
+  {
+    "speaker": "host",
+    "text": "So fragility is still your central metaphor.",
+    "energyScore": 0.42,
+    "specificityScore": 0.56,
+    "evasionScore": 0.05,
+    "noveltyScore": 0.44,
+    "threadIdLink": "51111111-1111-4111-8111-111111111111"
+  },
+  {
+    "speaker": "guest",
+    "text": "Yes because people trust brittle systems longer than they should.",
+    "energyScore": 0.47,
+    "specificityScore": 0.58,
+    "evasionScore": 0.06,
+    "noveltyScore": 0.39,
+    "threadIdLink": "51111111-1111-4111-8111-111111111111"
+  },
+  {
+    "speaker": "host",
+    "text": "And the mill closure remains your reference point.",
+    "energyScore": 0.41,
+    "specificityScore": 0.57,
+    "evasionScore": 0.05,
+    "noveltyScore": 0.36,
+    "threadIdLink": "51111111-1111-4111-8111-111111111111"
+  },
+  {
+    "speaker": "guest",
+    "text": "It is the cleanest proof I have that abstraction can hurt people.",
+    "energyScore": 0.46,
+    "specificityScore": 0.6,
+    "evasionScore": 0.05,
+    "noveltyScore": 0.34,
+    "threadIdLink": "51111111-1111-4111-8111-111111111111"
+  },
+  {
+    "speaker": "host",
+    "text": "You are still talking about fragility more than about product choices.",
+    "energyScore": 0.45,
+    "specificityScore": 0.59,
+    "evasionScore": 0.05,
+    "noveltyScore": 0.33,
+    "threadIdLink": "51111111-1111-4111-8111-111111111111"
+  },
+  {
+    "speaker": "guest",
+    "text": "Because product choices are just moral choices with diagrams.",
+    "energyScore": 0.5,
+    "specificityScore": 0.57,
+    "evasionScore": 0.08,
+    "noveltyScore": 0.31,
+    "threadIdLink": "51111111-1111-4111-8111-111111111111"
+  },
+  {
+    "speaker": "host",
+    "text": "That sounds close to what you said five minutes ago.",
+    "energyScore": 0.43,
+    "specificityScore": 0.48,
+    "evasionScore": 0.05,
+    "noveltyScore": 0.28,
+    "threadIdLink": null
+  },
+  {
+    "speaker": "guest",
+    "text": "Probably because the lesson really did not change.",
+    "energyScore": 0.39,
+    "specificityScore": 0.41,
+    "evasionScore": 0.11,
+    "noveltyScore": 0.24,
+    "threadIdLink": null
+  },
+  {
+    "speaker": "host",
+    "text": "Then give me the non-metaphor version of that lesson.",
+    "energyScore": 0.56,
+    "specificityScore": 0.67,
+    "evasionScore": 0.04,
+    "noveltyScore": 0.42,
+    "threadIdLink": "51111111-1111-4111-8111-111111111111"
+  },
+  {
+    "speaker": "guest",
+    "text": "Tell operators the truth before the dashboard looks clean.",
+    "energyScore": 0.52,
+    "specificityScore": 0.68,
+    "evasionScore": 0.06,
+    "noveltyScore": 0.37,
+    "threadIdLink": "51111111-1111-4111-8111-111111111111"
+  },
+  {
+    "speaker": "host",
+    "text": "So we are still on the same trust argument.",
+    "energyScore": 0.4,
+    "specificityScore": 0.46,
+    "evasionScore": 0.05,
+    "noveltyScore": 0.22,
+    "threadIdLink": null
+  },
+  {
+    "speaker": "guest",
+    "text": "Yes the trust argument and the factory story are the same thing.",
+    "energyScore": 0.41,
+    "specificityScore": 0.49,
+    "evasionScore": 0.08,
+    "noveltyScore": 0.2,
+    "threadIdLink": "51111111-1111-4111-8111-111111111111"
+  },
+  {
+    "speaker": "host",
+    "text": "It feels saturated now, not unresolved.",
+    "energyScore": 0.38,
+    "specificityScore": 0.43,
+    "evasionScore": 0.04,
+    "noveltyScore": 0.18,
+    "threadIdLink": null
+  },
+  {
+    "speaker": "guest",
+    "text": "That is fair, I am repeating the same scar from different angles.",
+    "energyScore": 0.45,
+    "specificityScore": 0.55,
+    "evasionScore": 0.07,
+    "noveltyScore": 0.21,
+    "threadIdLink": null
+  }
+]
