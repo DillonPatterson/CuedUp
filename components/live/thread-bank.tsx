@@ -1,58 +1,16 @@
 import type { ConversationThread } from "@/types";
 
-type LiveThreadPreview = {
-  id: string;
-  label: string;
-  urgency: "active" | "cooling";
-};
-
 type ThreadBankProps = {
-  uiMode: "live" | "replay";
   sessionId: string;
   unresolvedThreads: ConversationThread[];
-  liveThreads: LiveThreadPreview[];
   turnCount: number;
 };
 
 export function ThreadBank({
-  uiMode,
   sessionId,
   unresolvedThreads,
-  liveThreads,
   turnCount,
 }: ThreadBankProps) {
-  if (uiMode === "live") {
-    return (
-      <section className="panel p-6 md:p-8">
-        <div className="space-y-3">
-          {liveThreads.length > 0 ? (
-            liveThreads.map((thread) => (
-              <article
-                key={thread.id}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50/70 px-4 py-4"
-              >
-                <h3 className="text-lg font-semibold text-stone-900">
-                  {thread.label}
-                </h3>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] ${
-                    thread.urgency === "active"
-                      ? "bg-amber-100 text-amber-800"
-                      : "bg-stone-200 text-stone-600"
-                  }`}
-                >
-                  {thread.urgency}
-                </span>
-              </article>
-            ))
-          ) : (
-            <p className="text-stone-600">No unresolved threads right now.</p>
-          )}
-        </div>
-      </section>
-    );
-  }
-
   return (
     <section className="panel p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">

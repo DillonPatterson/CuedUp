@@ -32,7 +32,18 @@ export type {
   SourceInputMode,
 } from "@/lib/dossier/contracts";
 export type { DossierLiveHandoff } from "@/lib/state/dossier-handoff";
+export type {
+  InterviewSessionSnapshot,
+  InterviewSessionTimeline,
+  LiveThreadIndicator,
+} from "@/lib/state/interview-session-timeline";
 export type { CreateNudgeInput, Nudge, NudgeType } from "@/lib/schemas/nudge";
+export type {
+  PresenceGuardDecision,
+  PresenceGuardOutcome,
+  SuppressionReason,
+  SurfaceCue,
+} from "@/lib/live/presence-guard";
 export type {
   TranscriptTurn,
   TranscriptTurnInput,

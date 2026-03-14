@@ -1,12 +1,13 @@
 "use client";
 
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import type { DossierLiveHandoff, TranscriptTurn } from "@/types";
 import { NudgeRail } from "@/components/live/nudge-rail";
+import { PresenceDecisionLog } from "@/components/live/presence-decision-log";
 import { ThreadBank } from "@/components/live/thread-bank";
 import { TopicMap } from "@/components/live/topic-map";
 import { TranscriptPanel } from "@/components/live/transcript-panel";
-import { buildInterviewReplayViewModel } from "@/lib/state/replay-view-model";
+import { buildInterviewSessionTimeline } from "@/lib/state/interview-session-timeline";
 
 type InterviewReplayProps = {
   displaySessionId: string;
@@ -16,9 +17,8 @@ type InterviewReplayProps = {
   transcriptTurns: TranscriptTurn[];
 };
 
-const INITIAL_TURN_INDEX = -1;
+const INITIAL_SNAPSHOT_INDEX = 0;
 const AUTOPLAY_INTERVAL_MS = 1800;
-type InterviewUiMode = "live" | "replay";
 
 export function InterviewReplay({
   displaySessionId,
@@ -27,37 +27,34 @@ export function InterviewReplay({
   handoff,
   transcriptTurns,
 }: InterviewReplayProps) {
-  const [uiMode, setUiMode] = useState<InterviewUiMode>("live");
-  const [currentTurnIndex, setCurrentTurnIndex] = useState(INITIAL_TURN_INDEX);
-  const [isReplayAutoplaying, setIsReplayAutoplaying] = useState(false);
-
-  const viewModel = buildInterviewReplayViewModel(
-    engineSessionId,
-    handoff,
-    transcriptTurns,
-    currentTurnIndex,
+  const timeline = useMemo(
+    () => buildInterviewSessionTimeline(engineSessionId, handoff, transcriptTurns),
+    [engineSessionId, handoff, transcriptTurns],
   );
-  const isAutoplaying =
-    uiMode === "live"
-      ? currentTurnIndex < transcriptTurns.length - 1
-      : isReplayAutoplaying;
+  const [currentSnapshotIndex, setCurrentSnapshotIndex] = useState(INITIAL_SNAPSHOT_INDEX);
+  const [isAutoplaying, setIsAutoplaying] = useState(false);
+  const currentSnapshot = timeline.snapshots[currentSnapshotIndex];
+  const currentTurnIndex = currentSnapshotIndex - 1;
+  const recentDecisions = timeline.decisionLog
+    .slice(Math.max(0, currentSnapshotIndex - 5), currentSnapshotIndex + 1)
+    .reverse();
 
   useEffect(() => {
     if (!isAutoplaying) {
       return undefined;
     }
 
-    if (currentTurnIndex >= transcriptTurns.length - 1) {
+    if (currentSnapshotIndex >= timeline.snapshots.length - 1) {
       return undefined;
     }
 
     const intervalId = window.setInterval(() => {
       startTransition(() => {
-        setCurrentTurnIndex((index) => {
-          const nextIndex = Math.min(index + 1, transcriptTurns.length - 1);
+        setCurrentSnapshotIndex((index) => {
+          const nextIndex = Math.min(index + 1, timeline.snapshots.length - 1);
 
-          if (uiMode === "replay" && nextIndex >= transcriptTurns.length - 1) {
-            window.setTimeout(() => setIsReplayAutoplaying(false), 0);
+          if (nextIndex >= timeline.snapshots.length - 1) {
+            window.setTimeout(() => setIsAutoplaying(false), 0);
           }
 
           return nextIndex;
@@ -66,146 +63,68 @@ export function InterviewReplay({
     }, AUTOPLAY_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
-  }, [currentTurnIndex, isAutoplaying, transcriptTurns.length, uiMode]);
+  }, [currentSnapshotIndex, isAutoplaying, timeline.snapshots.length]);
 
   function handleNext() {
     startTransition(() => {
-      setCurrentTurnIndex((index) => Math.min(index + 1, transcriptTurns.length - 1));
+      setCurrentSnapshotIndex((index) => Math.min(index + 1, timeline.snapshots.length - 1));
     });
   }
 
   function handlePrevious() {
     startTransition(() => {
-      setCurrentTurnIndex((index) => Math.max(index - 1, INITIAL_TURN_INDEX));
+      setCurrentSnapshotIndex((index) => Math.max(index - 1, INITIAL_SNAPSHOT_INDEX));
     });
   }
 
   function handleReset() {
     startTransition(() => {
-      setCurrentTurnIndex(INITIAL_TURN_INDEX);
-      setIsReplayAutoplaying(false);
+      setCurrentSnapshotIndex(INITIAL_SNAPSHOT_INDEX);
+      setIsAutoplaying(false);
     });
   }
 
   function handleAutoplayToggle() {
-    setIsReplayAutoplaying((value) => !value);
-  }
-
-  function handleModeChange(nextMode: InterviewUiMode) {
-    startTransition(() => {
-      setUiMode(nextMode);
-
-      if (nextMode === "live") {
-        setIsReplayAutoplaying(false);
-      }
-    });
+    setIsAutoplaying((value) => !value);
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex justify-end">
-        {uiMode === "live" ? (
-          <button
-            type="button"
-            onClick={() => handleModeChange("replay")}
-            className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.16em] text-stone-500 transition hover:border-stone-400 hover:text-stone-700"
-          >
-            Replay/debug
-          </button>
-        ) : (
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">
-              Developer replay
-            </span>
-            <button
-              type="button"
-              onClick={() => handleModeChange("live")}
-              className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.16em] text-stone-600 transition hover:border-stone-400 hover:text-stone-800"
-            >
-              Return to live
-            </button>
-          </div>
-        )}
-      </div>
-
-      {uiMode === "live" ? (
-        <div className="space-y-4">
-          <div className="grid gap-4 xl:grid-cols-[1.45fr_0.9fr]">
-            <TranscriptPanel
-              uiMode="live"
-              sessionId={displaySessionId}
-              guestName={guestName}
-              recentTurns={viewModel.recentTurns}
-              currentTurn={viewModel.currentTurn}
-              previousTurn={viewModel.previousTurn}
-              currentTurnIndex={currentTurnIndex}
-              totalTurns={transcriptTurns.length}
-              onNext={handleNext}
-              onPrevious={handlePrevious}
-              onReset={handleReset}
-              onAutoplayToggle={handleAutoplayToggle}
-              isAutoplaying={isAutoplaying}
-            />
-            <NudgeRail
-              uiMode="live"
-              sessionId={displaySessionId}
-              currentMode={viewModel.state.currentMode}
-              staleNudgeGuard={viewModel.state.staleNudgeGuard}
-              candidateNextMoves={viewModel.topMoves}
-              liveCue={viewModel.liveCue}
-              hasCurrentTurn={viewModel.currentTurn !== null}
-            />
-          </div>
-          <ThreadBank
-            uiMode="live"
-            sessionId={displaySessionId}
-            unresolvedThreads={viewModel.unresolvedThreads}
-            liveThreads={viewModel.liveThreads}
-            turnCount={viewModel.state.turnCount}
-          />
-        </div>
-      ) : (
-        <div className="grid gap-6 xl:grid-cols-[1.6fr_0.95fr]">
-          <TranscriptPanel
-            uiMode="replay"
-            sessionId={displaySessionId}
-            guestName={guestName}
-            recentTurns={viewModel.recentTurns}
-            currentTurn={viewModel.currentTurn}
-            previousTurn={viewModel.previousTurn}
-            currentTurnIndex={currentTurnIndex}
-            totalTurns={transcriptTurns.length}
-            onNext={handleNext}
-            onPrevious={handlePrevious}
-            onReset={handleReset}
-            onAutoplayToggle={handleAutoplayToggle}
-            isAutoplaying={isAutoplaying}
-          />
-          <NudgeRail
-            uiMode="replay"
-            sessionId={displaySessionId}
-            currentMode={viewModel.state.currentMode}
-            staleNudgeGuard={viewModel.state.staleNudgeGuard}
-            candidateNextMoves={viewModel.topMoves}
-            liveCue={viewModel.liveCue}
-            hasCurrentTurn={viewModel.currentTurn !== null}
-          />
-          <ThreadBank
-            uiMode="replay"
-            sessionId={displaySessionId}
-            unresolvedThreads={viewModel.unresolvedThreads}
-            liveThreads={viewModel.liveThreads}
-            turnCount={viewModel.state.turnCount}
-          />
-          <TopicMap
-            sessionId={displaySessionId}
-            coveredVeins={viewModel.state.coveredVeins}
-            storyVeinProgress={viewModel.storyVeinProgress}
-            emotionalHeat={viewModel.state.emotionalHeat}
-            closureConfidence={viewModel.state.closureConfidence}
-          />
-        </div>
-      )}
+    <div className="grid gap-6 xl:grid-cols-[1.6fr_0.95fr]">
+      <TranscriptPanel
+        sessionId={displaySessionId}
+        guestName={guestName}
+        recentTurns={currentSnapshot.recentTurns}
+        currentTurn={currentSnapshot.currentTurn}
+        currentTurnIndex={currentTurnIndex}
+        totalTurns={transcriptTurns.length}
+        onNext={handleNext}
+        onPrevious={handlePrevious}
+        onReset={handleReset}
+        onAutoplayToggle={handleAutoplayToggle}
+        isAutoplaying={isAutoplaying}
+      />
+      <NudgeRail
+        sessionId={displaySessionId}
+        currentMode={currentSnapshot.conversationState.currentMode}
+        staleNudgeGuard={currentSnapshot.conversationState.staleNudgeGuard}
+        candidateNextMoves={currentSnapshot.topMoves}
+      />
+      <ThreadBank
+        sessionId={displaySessionId}
+        unresolvedThreads={currentSnapshot.unresolvedThreads}
+        turnCount={currentSnapshot.conversationState.turnCount}
+      />
+      <TopicMap
+        sessionId={displaySessionId}
+        coveredVeins={currentSnapshot.conversationState.coveredVeins}
+        storyVeinProgress={currentSnapshot.storyVeinProgress}
+        emotionalHeat={currentSnapshot.conversationState.emotionalHeat}
+        closureConfidence={currentSnapshot.conversationState.closureConfidence}
+      />
+      <PresenceDecisionLog
+        currentDecision={currentSnapshot.decisionLogEntry}
+        recentDecisions={recentDecisions}
+      />
     </div>
   );
 }
