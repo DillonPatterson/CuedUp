@@ -8,6 +8,7 @@ import { ReplayTranscriptInput } from "@/components/live/replay-transcript-input
 import { ThreadBank } from "@/components/live/thread-bank";
 import { TopicMap } from "@/components/live/topic-map";
 import { TranscriptPanel } from "@/components/live/transcript-panel";
+import { replayFixtures } from "@/lib/mock/replay-fixtures";
 import { buildInterviewSessionTimeline } from "@/lib/state/interview-session-timeline";
 import {
   appendManualTranscriptTurn,
@@ -136,6 +137,30 @@ export function InterviewReplay({
     });
   }
 
+  function handleLoadFixture(fixtureId: string) {
+    const fixture = replayFixtures.find((item) => item.id === fixtureId);
+
+    if (!fixture) {
+      return;
+    }
+
+    const nextTurns = importReplayTranscriptTurns([], engineSessionId, fixture.rawTranscript);
+
+    startTransition(() => {
+      setReplayLocalTurns(nextTurns);
+      setCurrentSnapshotIndex(INITIAL_SNAPSHOT_INDEX);
+      setIsAutoplaying(false);
+    });
+  }
+
+  function handleResetToSeededSession() {
+    startTransition(() => {
+      setReplayLocalTurns(transcriptTurns);
+      setCurrentSnapshotIndex(INITIAL_SNAPSHOT_INDEX);
+      setIsAutoplaying(false);
+    });
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1.6fr_0.95fr]">
       <TranscriptPanel
@@ -174,8 +199,11 @@ export function InterviewReplay({
         recentDecisions={recentDecisions}
       />
       <ReplayTranscriptInput
+        fixtures={replayFixtures}
         onAppend={handleAppendTurn}
         onImport={handleImportTranscript}
+        onLoadFixture={handleLoadFixture}
+        onResetToSeededSession={handleResetToSeededSession}
       />
     </div>
   );

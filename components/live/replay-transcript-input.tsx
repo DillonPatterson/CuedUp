@@ -3,10 +3,14 @@
 import { useState } from "react";
 import type { TranscriptTurn } from "@/types";
 import type { ManualTranscriptTurnDraft } from "@/lib/transcript/manual-turns";
+import type { ReplayFixtureDefinition } from "@/lib/mock/replay-fixtures";
 
 type ReplayTranscriptInputProps = {
+  fixtures: ReplayFixtureDefinition[];
   onAppend: (draft: ManualTranscriptTurnDraft) => void;
   onImport: (rawTranscript: string) => void;
+  onLoadFixture: (fixtureId: string) => void;
+  onResetToSeededSession: () => void;
 };
 
 const initialDraft: ManualTranscriptTurnDraft = {
@@ -27,8 +31,11 @@ const speakerOptions: TranscriptTurn["speaker"][] = [
 ];
 
 export function ReplayTranscriptInput({
+  fixtures,
   onAppend,
   onImport,
+  onLoadFixture,
+  onResetToSeededSession,
 }: ReplayTranscriptInputProps) {
   const [draft, setDraft] = useState(initialDraft);
   const [rawTranscript, setRawTranscript] = useState("");
@@ -99,6 +106,47 @@ export function ReplayTranscriptInput({
 
   return (
     <section className="panel p-6">
+      <div>
+        <p className="eyebrow">Replay fixtures</p>
+        <h2 className="mt-2 text-2xl font-semibold text-stone-900">
+          Fixture loader
+        </h2>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {fixtures.map((fixture) => (
+            <button
+              key={fixture.id}
+              type="button"
+              onClick={() => {
+                try {
+                  onLoadFixture(fixture.id);
+                  setLoadError(null);
+                } catch (error) {
+                  setLoadError(
+                    error instanceof Error
+                      ? error.message
+                      : "Unable to load fixture transcript.",
+                  );
+                }
+              }}
+              className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+            >
+              {fixture.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              onResetToSeededSession();
+              setLoadError(null);
+            }}
+            className="rounded-full border border-amber-300 px-4 py-2 text-sm font-medium text-amber-800 transition hover:border-amber-400"
+          >
+            Reset to seeded mock session
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-8 border-t border-stone-200 pt-8">
       <p className="eyebrow">Append turn</p>
       <h2 className="mt-2 text-2xl font-semibold text-stone-900">
         Manual transcript input
@@ -213,8 +261,9 @@ export function ReplayTranscriptInput({
           Append turn
         </button>
       </form>
+      </div>
 
-      <form className="mt-8 space-y-4" onSubmit={handleImportSubmit}>
+      <form className="mt-8 space-y-4 border-t border-stone-200 pt-8" onSubmit={handleImportSubmit}>
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">
             Load transcript
