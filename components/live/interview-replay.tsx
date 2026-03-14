@@ -29,15 +29,17 @@ export function InterviewReplay({
   handoff,
   transcriptTurns,
 }: InterviewReplayProps) {
-  const [workingTranscriptTurns, setWorkingTranscriptTurns] = useState(transcriptTurns);
+  // Replay owns an ephemeral local copy of turns so manual appends stay dev-only
+  // and do not pretend to be canonical persisted session truth.
+  const [replayLocalTurns, setReplayLocalTurns] = useState(transcriptTurns);
   const timeline = useMemo(
     () =>
       buildInterviewSessionTimeline(
         engineSessionId,
         handoff,
-        workingTranscriptTurns,
+        replayLocalTurns,
       ),
-    [engineSessionId, handoff, workingTranscriptTurns],
+    [engineSessionId, handoff, replayLocalTurns],
   );
   const [currentSnapshotIndex, setCurrentSnapshotIndex] = useState(INITIAL_SNAPSHOT_INDEX);
   const [isAutoplaying, setIsAutoplaying] = useState(false);
@@ -100,13 +102,15 @@ export function InterviewReplay({
     draft: Parameters<typeof appendManualTranscriptTurn>[2],
   ) {
     const nextTurns = appendManualTranscriptTurn(
-      workingTranscriptTurns,
+      replayLocalTurns,
       engineSessionId,
       draft,
     );
 
     startTransition(() => {
-      setWorkingTranscriptTurns(nextTurns);
+      setReplayLocalTurns(nextTurns);
+      // The timeline builder emits one initial seeded snapshot plus one snapshot
+      // per turn, so the latest turn always lives at snapshot index `turns.length`.
       setCurrentSnapshotIndex(nextTurns.length);
       setIsAutoplaying(false);
     });
@@ -120,7 +124,7 @@ export function InterviewReplay({
         recentTurns={currentSnapshot.recentTurns}
         currentTurn={currentSnapshot.currentTurn}
         currentTurnIndex={currentTurnIndex}
-        totalTurns={workingTranscriptTurns.length}
+        totalTurns={replayLocalTurns.length}
         onNext={handleNext}
         onPrevious={handlePrevious}
         onReset={handleReset}

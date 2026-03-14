@@ -156,6 +156,9 @@ export function buildInterviewSessionTimeline(
   handoff: DossierLiveHandoff,
   turns: TranscriptTurn[],
 ): InterviewSessionTimeline {
+  // Full rebuild on every append is intentionally acceptable for replay/manual
+  // validation because it preserves a single deterministic event-stream-to-state
+  // path. This is a known future blocker for true streaming ingestion.
   let state = seedConversationStateFromDossier(sessionId, handoff);
   const surfacedCueHistory: SurfaceCue[] = [];
   const decisionLog: PresenceGuardDecision[] = [];
@@ -201,6 +204,9 @@ export function buildInterviewSessionTimeline(
     }
 
     snapshots.push(
+      // Snapshot indexing is stable by construction: one seeded snapshot at index 0,
+      // then one additional snapshot per processed turn, so `snapshots.length`
+      // always equals `turns.length + 1`.
       buildSnapshot(
         index + 1,
         state,
