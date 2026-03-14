@@ -313,15 +313,26 @@ def validate_adapter_configs(config: dict, dry_run: bool) -> list[str]:
             raise ValueError(f"Unsupported provider: {provider}")
         if not model:
             raise ValueError(f"Adapter `{name}` is missing a model name.")
+        if provider != "codex" and name != model:
+            raise ValueError(
+                f"Adapter `{name}` must use the same display name and model ID for trustworthy artifacts."
+            )
 
         if not any(model.startswith(prefix) for prefix in MODEL_PREFIX_RULES[provider]):
             raise ValueError(
                 f"Adapter `{name}` has a suspicious model name `{model}` for provider `{provider}`."
             )
 
-        if provider == "openai" and model == "gpt-5.4":
+        if provider == "openai" and model in {"gpt-5.2", "gpt-5.4"}:
             raise ValueError(
-                "Adapter `{name}` is using `gpt-5.4`, which is not a valid current OpenAI model alias.".format(
+                "Adapter `{name}` is using `{model}`, which is not a valid current OpenAI model alias for this tool.".format(
+                    name=name,
+                    model=model,
+                )
+            )
+        if provider == "anthropic" and model == "claude-sonnet-4-20250514":
+            raise ValueError(
+                "Adapter `{name}` is pinned to an old Anthropic snapshot. Use the current supported ID such as `claude-sonnet-4-6`.".format(
                     name=name
                 )
             )

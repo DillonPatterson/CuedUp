@@ -28,6 +28,11 @@ TEXT_EXTENSIONS = {
     ".yml",
 }
 NON_EVIDENCE_FILES = {"AGENTS.md"}
+CORE_FILE_LIMITS = {
+    "lib/state/conversation-engine.ts": {"max_lines": 220, "max_chars": 12_000},
+    "lib/live/presence-guard.ts": {"max_lines": 180, "max_chars": 10_000},
+    "lib/state/interview-session-timeline.ts": {"max_lines": 180, "max_chars": 10_000},
+}
 FALLBACK_FILES = [
     "lib/state/conversation-engine.ts",
     "lib/live/presence-guard.ts",
@@ -61,14 +66,23 @@ def _is_evidence_file(path: Path) -> bool:
     return path.name not in NON_EVIDENCE_FILES
 
 
-def _truncate_text(content: str, max_lines: int = 80, max_chars: int = 4_000) -> str:
+def _truncate_text(
+    content: str, max_lines: int = 80, max_chars: int = 4_000
+) -> tuple[str, bool]:
     lines = content.splitlines()
     truncated = "\n".join(lines[:max_lines])
     if len(truncated) > max_chars:
-        return truncated[:max_chars].rstrip() + "\n...[truncated]"
+        return truncated[:max_chars].rstrip() + "\n...[truncated]", True
     if len(lines) > max_lines:
-        return truncated.rstrip() + "\n...[truncated]"
-    return truncated
+        return truncated.rstrip() + "\n...[truncated]", True
+    return truncated, False
+
+
+def _excerpt_limits_for_path(path: Path) -> dict[str, int]:
+    return CORE_FILE_LIMITS.get(
+        path.as_posix(),
+        {"max_lines": 80, "max_chars": 4_000},
+    )
 
 
 def _parse_changed_files(status_output: str) -> list[dict[str, str]]:
@@ -148,12 +162,18 @@ def _collect_selected_files(
 
     excerpts: list[dict[str, str]] = []
     for path in selected_paths:
+        relative_path = path.relative_to(repo_root).as_posix()
+        limits = _excerpt_limits_for_path(Path(relative_path))
+        content, is_truncated = _truncate_text(
+            path.read_text(encoding="utf-8", errors="replace"),
+            max_lines=limits["max_lines"],
+            max_chars=limits["max_chars"],
+        )
         excerpts.append(
             {
-                "path": path.relative_to(repo_root).as_posix(),
-                "content": _truncate_text(
-                    path.read_text(encoding="utf-8", errors="replace")
-                ),
+                "path": relative_path,
+                "content": content,
+                "truncated": "yes" if is_truncated else "no",
             }
         )
     return excerpts
@@ -181,7 +201,9 @@ def _collect_diff_snippets(
         snippets.append(
             {
                 "path": relative_path,
-                "diff": _truncate_text(diff_text, max_lines=120, max_chars=5_000),
+                "diff": _truncate_text(
+                    diff_text, max_lines=120, max_chars=5_000
+                )[0],
             }
         )
         if len(snippets) >= 3:
@@ -203,6 +225,7 @@ def gather_repo_context(repo_root: Path) -> dict:
         "compact_tree": _build_compact_tree(repo_root),
         "selected_file_contents": _collect_selected_files(repo_root, changed_files),
         "diff_snippets": _collect_diff_snippets(repo_root, changed_files),
+        "selected_file_count": len(_collect_selected_files(repo_root, changed_files)),
     }
 
 
@@ -212,7 +235,7 @@ def render_repo_context(context: dict) -> str:
         "",
         f"- Branch: `{context['branch']}`",
         "- Context scope: partial and bounded",
-        f"- Selected evidence files: {len(context['selected_file_contents'])}",
+        f"- Selected evidence files: {context['selected_file_count']}",
         f"- Diff snippets included: {len(context['diff_snippets'])}",
         "",
         "## Latest Commit",
@@ -256,6 +279,8 @@ def render_repo_context(context: dict) -> str:
             sections.extend(
                 [
                     f"### {file_info['path']}",
+                    "",
+                    f"- Inclusion: {'truncated excerpt' if file_info['truncated'] == 'yes' else 'full excerpt within bounds'}",
                     "",
                     "```text",
                     file_info["content"],

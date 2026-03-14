@@ -18,7 +18,7 @@ Local file-based multi-LLM orchestration for the CuedUp repo. This tool stays ou
 ## Default models
 
 - Anthropic: `claude-sonnet-4-6`
-- OpenAI: `gpt-5.2`
+- OpenAI: `gpt-4o`
 - Gemini: `gemini-2.5-pro`
 
 You can override these in [tools/orchestrator/config/pipeline.json](C:\Users\dillo\Desktop\CuedUp\tools\orchestrator\config\pipeline.json) if your account or provider setup requires different valid model IDs.

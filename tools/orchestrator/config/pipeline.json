@@ -12,18 +12,18 @@
       "cli_command": "codex"
     },
     {
-      "name": "claude",
+      "name": "claude-sonnet-4-6",
       "provider": "anthropic",
       "model": "claude-sonnet-4-6",
       "max_tokens": 2048
     },
     {
-      "name": "gpt-5.4",
+      "name": "gpt-4o",
       "provider": "openai",
-      "model": "gpt-5.2"
+      "model": "gpt-4o"
     },
     {
-      "name": "gemini-3-pro",
+      "name": "gemini-2.5-pro",
       "provider": "gemini",
       "model": "gemini-2.5-pro"
     }
