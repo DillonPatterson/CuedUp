@@ -1,133 +1,116 @@
 # CuedUp
 
-CuedUp is a personal-use-first prototype for supporting live interviews with lightweight dossier prep, transcript tracking, background recap generation, and sparse operator nudges.
+CuedUp is a compact Next.js starter for building modern TypeScript applications with a clean project structure, lightweight validation, and practical integration boundaries.
 
-## Current prototype scope
+It is intended for teams and solo developers who want a polished foundation for internal tools, dashboard-style products, or frontend experiments without starting from a blank project.
 
-This repository only sets up the foundation:
+## Overview
 
-- Next.js App Router with TypeScript and Tailwind CSS.
-- Zod schemas for the first-pass domain contracts.
-- Placeholder pages and components for dossier, live interview, and recap workflows.
-- Placeholder API routes with request validation.
-- Supabase helpers and SQL migrations for the initial relational model.
-- Inngest client wiring and placeholder background functions.
+This repository packages a small but useful set of defaults:
 
-## Project structure
+- App Router with a clear page and route layout
+- Type-safe development with shared runtime validation
+- Tailwind CSS for fast iteration on layout and styling
+- modular UI components that are easy to extend
+- helper layers for storage and background workflows
 
-```text
-app/                  App Router pages, layouts, global styles, and HTTP routes
-components/           Minimal UI shells for live interview and dossier surfaces
-inngest/              Background job client and function definitions
-lib/deepgram/         Placeholder seam for future transcription streaming work
-lib/prompts/          Prompt contracts and response-shape placeholders
-lib/schemas/          Zod schemas and input validators for core entities
-lib/state/            Conversation-state helpers and next-move planning seam
-lib/supabase/         Browser and server Supabase client helpers
-supabase/migrations/  Initial SQL migrations for prototype tables
-types/                Re-exported TypeScript types inferred from schemas
-```
+The codebase favors explicit boundaries and readable files over large abstractions. It is designed to be easy to navigate, easy to adapt, and straightforward to evolve as requirements become clearer.
 
-## Major layers
+## Features
 
-- `app/`: entry points for operators and API consumers.
-- `components/`: presentational shells only, with no business logic hidden in the UI.
-- `lib/`: domain contracts, integration helpers, and placeholder orchestration seams.
-- `supabase/`: database schema evolution and seed data.
-- `inngest/`: asynchronous workflows that will later handle dossier and recap generation.
+- Next.js App Router project structure
+- TypeScript-first development experience
+- Zod schemas for runtime validation and inferred types
+- Tailwind CSS styling setup
+- API route scaffolding for server-side entry points
+- Supabase helper modules for browser and server usage
+- Inngest setup placeholders for asynchronous jobs
+- deterministic local development utilities for repeatable testing
 
-## Dossier contract
+## Tech Stack
 
-A dossier is the structured interview brief for a single guest. It gathers the strongest narrative threads, sensitive pressure points, contradictions, hooks, openings, follow-ups, and source evidence into one object that the rest of the system can reason over.
+- [Next.js](https://nextjs.org/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Zod](https://zod.dev/)
+- [Supabase](https://supabase.com/)
+- [Inngest](https://www.inngest.com/)
 
-`StoryVein` is the core object because it represents the main narrative lanes worth exploring live. The other dossier sections mostly support vein selection and timing: live wires show risk, contradictions create pressure, audience hooks shape framing, and source references preserve traceability.
+## Getting Started
 
-During a live session, the dossier will feed the interview system by helping it choose what to open with, which veins are still uncovered, when a contradiction is worth pressing, and which follow-up fragments are available when a guest gives the operator a usable moment.
+### Prerequisites
 
-## Dossier workflow
+- Node.js 20 or newer
+- npm 10 or newer
 
-The current dossier workflow is intentionally simple and explicit:
-
-1. Source ingestion starts with a development-only source contract covering pasted text, URLs, notes, and transcript excerpts.
-2. The prompt contract in `lib/prompts/dossier.ts` turns those sources into a strict long-context extraction brief for a future model.
-3. The mock generator in `lib/dossier/mock.ts` produces a deterministic dossier object from sample prep material.
-4. Parsing and validation utilities in `lib/dossier/parse.ts` normalize enum-like values, parse raw JSON safely, and reject malformed dossier payloads with useful error output.
-5. The dossier page renders the validated dossier into sections built for interviewer prep rather than generic admin display.
-6. The dossier handoff layer extracts the live-useful subset for future conversation-state logic.
-
-## Conversation-state workflow
-
-The first conversation-state engine is deterministic and local:
-
-1. The dossier handoff seeds a thread ledger from story veins, live wires, and contradiction candidates.
-2. Structured transcript turns replay through the state engine with fixed scores for energy, specificity, evasion, and novelty.
-3. Thread saturation, lifecycle status, covered veins, emotional heat, and closure confidence update from transcript evidence rather than ad hoc flags.
-4. Candidate next moves are ranked from unresolved contradictions, live wires, still-open veins, and eligible follow-ups.
-5. Repeated move keys are filtered so stale nudges get suppressed instead of resurfacing every turn.
-
-Run the local replay harness with:
+### Installation
 
 ```bash
-npm run state:replay
+npm install
 ```
 
-The harness proves the state engine can seed from the `test-guest` dossier, consume the mock transcript deterministically, and print evolving unresolved-thread state. It does not prove live UI integration, real transcription quality, or production nudge quality.
+### Local development
 
-## Live interview replay page
+Create a local environment file from the example:
 
-Open the mock live page at:
+```bash
+cp .env.local.example .env.local
+```
 
-- `http://localhost:3000/interview/mock-session`
+Start the development server:
 
-What it does:
+```bash
+npm run dev
+```
 
-- seeds the live view from the fixed `test-guest` dossier handoff
-- simulates transcript ingestion using the deterministic mock transcript turns
-- shows unresolved threads, covered veins, emotional heat, closure confidence, and top candidate next moves
+Open the app at:
 
-Controls:
+```text
+http://localhost:3000
+```
 
-- `Next turn`: apply the next transcript turn
-- `Previous`: rewind one turn by rebuilding replay state deterministically
-- `Start autoplay` / `Stop autoplay`: step through turns at a readable pace
-- `Reset replay`: return to the seeded pre-turn state
+## Project Structure
 
-What is still fake:
+```text
+app/                  App Router pages, layouts, styles, and route handlers
+components/           Reusable UI pieces and feature-oriented presentation layers
+inngest/              Background function setup and related helpers
+lib/                  Shared utilities, schemas, and integration boundaries
+supabase/             SQL migrations and seed scaffolding
+types/                Shared TypeScript exports
+scripts/              Small development utilities
+```
 
-- transcript input is replayed from local mock data
-- no realtime transcription or audio pipeline exists yet
-- candidate moves are deterministic engine outputs, not final AI-written wording
+## Available Scripts
 
-## Default mock guest
+- `npm run dev` starts the local development server
+- `npm run build` creates a production build
+- `npm run start` serves the production build locally
+- `npm run lint` runs ESLint across the project
+- `npm run state:replay` runs a local deterministic development utility
 
-The default working mock guest slug is `test-guest`. It is a development alias over the current mock source set, so these routes should work without any setup:
+## Development Notes
 
-- `http://localhost:3000/api/dossier?guestId=test-guest`
-- `http://localhost:3000/dossier/test-guest`
+- Validation and TypeScript types are kept close together to reduce drift between runtime and compile-time contracts.
+- Integration code is separated from presentation code to keep feature work easier to review.
+- The repository includes placeholders for external services, but most of the scaffold remains usable for local-first development.
+- The project is intentionally structured for iterative feature work rather than heavy upfront architecture.
 
-The original named mock guest slug `mara-vance` still works as well.
+## Extending the Starter
 
-## What is not built yet
+When adding new features, prefer:
 
-- Real model calls or provider orchestration.
-- Persistent dossier storage in Supabase.
-- Human editing workflows for dossier sections.
-- Automatic source ingestion, scraping, or document parsing.
-- Live interview page integration for the conversation-state engine.
-- Real-time transcript ingestion and operator feedback loops.
+- small, focused modules
+- clear schema updates
+- minimal coupling between UI and service layers
+- incremental changes that preserve readability
 
-## Local development
+This keeps the project approachable as it grows and makes future refactors safer.
 
-1. Copy `.env.local.example` to `.env.local`.
-2. Fill in Supabase, Inngest, and provider keys when those integrations are ready.
-3. Run `npm install`.
-4. Run `npm run dev`.
-5. Open `http://localhost:3000`.
+## Deployment
 
-## Intentionally not built yet
+The current setup works well for local development and early hosted environments. Before deploying broadly, review environment configuration, service credentials, and any platform-specific production settings required by your target infrastructure.
 
-- Authentication and user/session management flows.
-- Advanced AI orchestration or provider routing.
-- Realtime audio, earbud mode, or speech transport logic.
-- Production-grade styling systems, billing, or enterprise-scale abstractions.
-- Full Supabase row-level security and production deployment hardening.
+## License
+
+Add the license that matches your intended usage before distributing or publishing the project.
