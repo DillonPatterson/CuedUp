@@ -9,6 +9,10 @@ type InterviewReplayPageProps = {
 export default async function InterviewReplayPage({
   params,
 }: InterviewReplayPageProps) {
+  // Session-aware routing is not implemented yet. `sessionId` currently exists
+  // for route shape and display only, while `getMockInterviewSession()` always
+  // returns the same seeded mock session regardless of URL. The deeper mock
+  // session explanation also lives in `lib/mock/interview-session.ts`.
   const { sessionId } = await params;
   const session = getMockInterviewSession();
 

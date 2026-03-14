@@ -109,6 +109,9 @@ export function InterviewReplay({
 
     startTransition(() => {
       setReplayLocalTurns(nextTurns);
+      // `snapshots[0]` is the seeded pre-turn snapshot and `snapshots[i]`
+      // corresponds to `turns[i - 1]`, so `nextTurns.length` lands on the
+      // snapshot produced by the just-appended turn.
       // The timeline builder emits one initial seeded snapshot plus one snapshot
       // per turn, so the latest turn always lives at snapshot index `turns.length`.
       setCurrentSnapshotIndex(nextTurns.length);
