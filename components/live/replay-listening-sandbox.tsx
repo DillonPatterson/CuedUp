@@ -224,6 +224,7 @@ export function ReplayListeningSandbox({
   const [error, setError] = useState<string | null>(null);
   const [lastCommit, setLastCommit] = useState<ListeningLastCommit | null>(null);
   const [wasRestored, setWasRestored] = useState(false);
+  const [segmentsExpanded, setSegmentsExpanded] = useState(false);
 
   const sessionState = error
     ? "Error"
@@ -730,238 +731,235 @@ export function ReplayListeningSandbox({
         </button>
       </div>
 
-      <div className="mt-6 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-        <div>
-          <label className="block rounded-3xl border border-stone-200 bg-white/80 p-4">
-            <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
-              Editable draft transcript
-            </span>
-            <textarea
-              value={draftText}
-              onChange={(event) => {
-                setDraftText(event.target.value);
-                setError(null);
-              }}
-              rows={8}
-              placeholder="Speech drafts accumulate here. You can also type or paste here directly if browser capture is weak."
-              className="mt-3 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-            />
-            <p className="mt-3 text-sm leading-6 text-stone-600">
-              The editable draft is still uncommitted. It only affects replay
-              after an explicit commit.
+      <div className="mt-6 space-y-5">
+        <label className="block rounded-3xl border border-stone-200 bg-white/80 p-4">
+          <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
+            Editable draft transcript
+          </span>
+          <textarea
+            value={draftText}
+            onChange={(event) => {
+              setDraftText(event.target.value);
+              setError(null);
+            }}
+            rows={8}
+            placeholder="Speech drafts accumulate here. You can also type or paste here directly if browser capture is weak."
+            className="mt-3 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+          />
+          <p className="mt-3 text-sm leading-6 text-stone-600">
+            The editable draft is still uncommitted. It only affects replay
+            after an explicit commit.
+          </p>
+        </label>
+
+        <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+              Interim capture
             </p>
-          </label>
-
-          <div className="mt-4 rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                Interim capture
-              </p>
-              <button
-                type="button"
-                onClick={handleStoreDraftAsSegment}
-                className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:border-stone-400"
-              >
-                Store draft as segment
-              </button>
-            </div>
-            <p className="mt-2 text-sm leading-6 text-stone-700">
-              {interimText || "No interim text right now."}
-            </p>
+            <button
+              type="button"
+              onClick={handleStoreDraftAsSegment}
+              className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:border-stone-400"
+            >
+              Store draft as segment
+            </button>
           </div>
-
-          <div className="mt-4 rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                Commit mapping
-              </p>
-              <button
-                type="button"
-                onClick={handleCommitDrafts}
-                className="rounded-full border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-900 transition hover:border-emerald-400"
-              >
-                Commit to replay
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="block">
-                <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                  Commit speaker
-                </span>
-                <select
-                  value={speaker}
-                  onChange={(event) =>
-                    setSpeaker(event.target.value as TranscriptTurn["speaker"])
-                  }
-                  className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                >
-                  {speakerOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                  Commit mode
-                </span>
-                <select
-                  value={commitMode}
-                  onChange={(event) =>
-                    setCommitMode(event.target.value as ListeningCommitMode)
-                  }
-                  className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                >
-                  <option value="single_turn">Editable draft as one turn</option>
-                  <option value="per_segment">One replay turn per segment</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="block">
-                <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                  Score mode
-                </span>
-                <select
-                  value={scoreMode}
-                  onChange={(event) =>
-                    setScoreMode(event.target.value as ListeningScoreMode)
-                  }
-                  className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                >
-                  <option value="defaults">Deterministic sandbox defaults</option>
-                  <option value="custom">Custom operator scores</option>
-                </select>
-              </label>
-              <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                  Commit behavior
-                </p>
-                <p className="mt-2 text-sm leading-6 text-stone-700">
-                  {commitMode === "single_turn"
-                    ? "Commits the editable draft as one replay-local turn."
-                    : "Commits each captured segment as its own replay-local turn. The editable draft is ignored in this mode."}
-                </p>
-              </article>
-            </div>
-
-            {scoreMode === "custom" ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                    Energy
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={customScores.energyScore}
-                    onChange={(event) =>
-                      updateCustomScore("energyScore", event.target.value)
-                    }
-                    className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                    Specificity
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={customScores.specificityScore}
-                    onChange={(event) =>
-                      updateCustomScore("specificityScore", event.target.value)
-                    }
-                    className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                    Evasion
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={customScores.evasionScore}
-                    onChange={(event) =>
-                      updateCustomScore("evasionScore", event.target.value)
-                    }
-                    className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                    Novelty
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={customScores.noveltyScore}
-                    onChange={(event) =>
-                      updateCustomScore("noveltyScore", event.target.value)
-                    }
-                    className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                  />
-                </label>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm leading-6 text-stone-700">
-                Using deterministic sandbox defaults: energy{" "}
-                {sandboxDefaults.energyScore}, specificity{" "}
-                {sandboxDefaults.specificityScore}, evasion{" "}
-                {sandboxDefaults.evasionScore}, novelty{" "}
-                {sandboxDefaults.noveltyScore}.
-              </p>
-            )}
-
-            {lastCommit ? (
-              <div className="mt-4 rounded-2xl border border-emerald-300 bg-emerald-50/80 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-emerald-700">
-                  Last replay commit
-                </p>
-                <p className="mt-2 text-sm leading-6 text-emerald-950">
-                  {lastCommit.turnCount} turn
-                  {lastCommit.turnCount === 1 ? "" : "s"} committed as{" "}
-                  {lastCommit.speaker} via {lastCommit.mode.replaceAll("_", " ")}{" "}
-                  at {lastCommit.committedAt}. Total words: {lastCommit.wordCount}.
-                </p>
-              </div>
-            ) : null}
-          </div>
+          <p className="mt-2 text-sm leading-6 text-stone-700">
+            {interimText || "No interim text right now."}
+          </p>
         </div>
 
-        <div>
-          <div className="rounded-3xl border border-stone-200 bg-stone-50/70 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                  Captured segments
-                </p>
-                <p className="mt-2 text-sm leading-6 text-stone-700">
-                  Final speech chunks and manually stored draft chunks. Removing
-                  a segment does not rewrite the editable draft automatically.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleRebuildDraftFromSegments}
-                className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:border-stone-400"
-              >
-                Rebuild draft from segments
-              </button>
-            </div>
+        <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+              Commit mapping
+            </p>
+            <button
+              type="button"
+              onClick={handleCommitDrafts}
+              className="rounded-full border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-900 transition hover:border-emerald-400"
+            >
+              Commit to replay
+            </button>
+          </div>
 
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="block">
+              <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                Commit speaker
+              </span>
+              <select
+                value={speaker}
+                onChange={(event) =>
+                  setSpeaker(event.target.value as TranscriptTurn["speaker"])
+                }
+                className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+              >
+                {speakerOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                Commit mode
+              </span>
+              <select
+                value={commitMode}
+                onChange={(event) =>
+                  setCommitMode(event.target.value as ListeningCommitMode)
+                }
+                className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+              >
+                <option value="single_turn">Editable draft as one turn</option>
+                <option value="per_segment">One replay turn per segment</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="block">
+              <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                Score mode
+              </span>
+              <select
+                value={scoreMode}
+                onChange={(event) =>
+                  setScoreMode(event.target.value as ListeningScoreMode)
+                }
+                className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+              >
+                <option value="defaults">Deterministic sandbox defaults</option>
+                <option value="custom">Custom operator scores</option>
+              </select>
+            </label>
+            <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                Commit behavior
+              </p>
+              <p className="mt-2 text-sm leading-6 text-stone-700">
+                {commitMode === "single_turn"
+                  ? "Commits the editable draft as one replay-local turn."
+                  : "Commits each captured segment as its own replay-local turn. The editable draft is ignored in this mode."}
+              </p>
+            </article>
+          </div>
+
+          {scoreMode === "custom" ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                  Energy
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={customScores.energyScore}
+                  onChange={(event) =>
+                    updateCustomScore("energyScore", event.target.value)
+                  }
+                  className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                  Specificity
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={customScores.specificityScore}
+                  onChange={(event) =>
+                    updateCustomScore("specificityScore", event.target.value)
+                  }
+                  className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                  Evasion
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={customScores.evasionScore}
+                  onChange={(event) =>
+                    updateCustomScore("evasionScore", event.target.value)
+                  }
+                  className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                  Novelty
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={customScores.noveltyScore}
+                  onChange={(event) =>
+                    updateCustomScore("noveltyScore", event.target.value)
+                  }
+                  className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+                />
+              </label>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm leading-6 text-stone-700">
+              Using deterministic sandbox defaults: energy{" "}
+              {sandboxDefaults.energyScore}, specificity{" "}
+              {sandboxDefaults.specificityScore}, evasion{" "}
+              {sandboxDefaults.evasionScore}, novelty{" "}
+              {sandboxDefaults.noveltyScore}.
+            </p>
+          )}
+
+          {lastCommit ? (
+            <div className="mt-4 rounded-2xl border border-emerald-300 bg-emerald-50/80 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-emerald-700">
+                Last replay commit
+              </p>
+              <p className="mt-2 text-sm leading-6 text-emerald-950">
+                {lastCommit.turnCount} turn
+                {lastCommit.turnCount === 1 ? "" : "s"} committed as{" "}
+                {lastCommit.speaker} via {lastCommit.mode.replaceAll("_", " ")}{" "}
+                at {lastCommit.committedAt}. Total words: {lastCommit.wordCount}.
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setSegmentsExpanded((value) => !value)}
+              className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+            >
+              {segments.length} segment{segments.length === 1 ? "" : "s"} captured -{" "}
+              {segmentsExpanded ? "hide" : "show"}
+            </button>
+            <button
+              type="button"
+              onClick={handleRebuildDraftFromSegments}
+              className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:border-stone-400"
+            >
+              Rebuild draft from segments
+            </button>
+          </div>
+
+          {segmentsExpanded ? (
             <div className="mt-4 space-y-3">
               {segments.length > 0 ? (
                 segments.map((segment, index) => (
@@ -1000,7 +998,7 @@ export function ReplayListeningSandbox({
                 </p>
               )}
             </div>
-          </div>
+          ) : null}
         </div>
       </div>
 

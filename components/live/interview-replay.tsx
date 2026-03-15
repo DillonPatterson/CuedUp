@@ -4,9 +4,8 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import type { DossierLiveHandoff, TranscriptTurn } from "@/types";
 import { NudgeRail } from "@/components/live/nudge-rail";
 import { PresenceDecisionLog } from "@/components/live/presence-decision-log";
-import { ConversationMemoryPanel } from "@/components/live/conversation-memory-panel";
+import { ReplayCurrentTurn } from "@/components/live/replay-current-turn";
 import { ReplayListeningSandbox } from "@/components/live/replay-listening-sandbox";
-import { ReplayTranscriptInput } from "@/components/live/replay-transcript-input";
 import { ReplayUpdatesPanel } from "@/components/live/replay-updates-panel";
 import { ThreadBank } from "@/components/live/thread-bank";
 import { TopicMap } from "@/components/live/topic-map";
@@ -170,14 +169,6 @@ export function InterviewReplay({
   const recentDecisions = timeline.decisionLog
     .slice(Math.max(0, currentSnapshotIndex - 5), currentSnapshotIndex)
     .reverse();
-  const workspaceModeLabel = "manual" as const;
-  const listeningStateLabel =
-    replayLocalTurns.length > 0 ? "Replay-local stream active" : "Waiting for input";
-  const currentTurnSignals = currentSnapshot.currentTurn
-    ? transcriptOrganization.sourceMetadataByTurnId[
-        currentSnapshot.currentTurn.id
-      ] ?? null
-    : null;
 
   useEffect(() => {
     const storedReplaySession = readStoredReplaySession(engineSessionId);
@@ -366,20 +357,21 @@ export function InterviewReplay({
     handleResetToSeededSession();
   }
 
+  void transcriptOrganization;
+  void handleAppendTurn;
+  void handleImportTranscript;
+
   return (
     <div className="space-y-6">
       <section className="panel p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-4xl">
-            <p className="eyebrow">Replay cockpit</p>
+            <p className="eyebrow">Replay/debug</p>
             <h2 className="mt-2 text-3xl font-semibold text-stone-900">
               Debug transcript workspace
             </h2>
             <p className="mt-3 text-sm leading-6 text-stone-700">
-              One replay-local turn stream feeds the deterministic timeline,
-              engine, and Presence Guard. Listening sandbox commits, manual
-              append, and JSON import all converge here without any built-in
-              story fixtures.
+              Commit speech, inspect engine output.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -417,84 +409,25 @@ export function InterviewReplay({
         onCommitDrafts={(drafts) => handleAppendDrafts(drafts, "sandbox commit")}
       />
 
-      <ConversationMemoryPanel
-        turns={visibleReplayTurns}
-        currentTurn={currentSnapshot.currentTurn}
+      <ReplayCurrentTurn
+        snapshot={currentSnapshot}
+        currentTurnIndex={currentTurnIndex}
+        totalTurns={replayLocalTurns.length}
+        replaySourceLabel={replaySource.label}
         turnMetadata={visibleReplayTurnMetadata}
-        currentTurnSignals={currentTurnSignals}
-        organization={transcriptOrganization}
-        modeLabel={workspaceModeLabel}
-        listeningStateLabel={listeningStateLabel}
-        sourceStateLabel={replaySource.label}
-        positionLabel={`Snapshot ${currentSnapshotIndex} / ${replayLocalTurns.length}`}
-        statusActions={
-          <>
-            <button
-              type="button"
-              onClick={handlePrevious}
-              disabled={currentTurnIndex < 0}
-              className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              onClick={handleNext}
-              disabled={currentTurnIndex >= replayLocalTurns.length - 1}
-              className="rounded-full bg-amber-700 px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Next turn
-            </button>
-            <button
-              type="button"
-              onClick={handleAutoplayToggle}
-              disabled={
-                replayLocalTurns.length === 0 ||
-                currentTurnIndex >= replayLocalTurns.length - 1
-              }
-              className="rounded-full border border-amber-700 px-4 py-2 text-sm font-medium text-amber-800 transition disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {isAutoplaying ? "Stop autoplay" : "Start autoplay"}
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition"
-            >
-              Reset replay
-            </button>
-          </>
-        }
+        isAutoplaying={isAutoplaying}
+        onNext={handleNext}
+        onPrevious={handlePrevious}
+        onReset={handleReset}
+        onAutoplayToggle={handleAutoplayToggle}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <ReplayTranscriptInput
-          replaySourceLabel={replaySource.label}
-          replaySourceDetail={replaySource.detail}
-          onAppend={handleAppendTurn}
-          onImport={handleImportTranscript}
-          onResetSession={handleResetToSeededSession}
+      <div className="grid gap-6 xl:grid-cols-3">
+        <ThreadBank
+          sessionId={displaySessionId}
+          unresolvedThreads={currentSnapshot.unresolvedThreads}
+          turnCount={currentSnapshot.conversationState.turnCount}
         />
-        <div className="panel p-6">
-          <p className="eyebrow">Testing path</p>
-          <h2 className="mt-2 text-2xl font-semibold text-stone-900">
-            Real speech only
-          </h2>
-          <p className="mt-3 text-sm leading-6 text-stone-700">
-            This replay surface no longer ships with canned Gemini-style story
-            runs. Start listening, speak into your mic, point the laptop at TV
-            audio, or paste/import the transcript you actually want to inspect.
-          </p>
-          <div className="mt-5 space-y-3 rounded-2xl border border-stone-200 bg-stone-50/70 p-4 text-sm leading-6 text-stone-700">
-            <p>1. Use Listening sandbox to capture speech locally.</p>
-            <p>2. Commit the draft into replay when the text looks right.</p>
-            <p>3. Step turns, inspect memory, cues, threads, and guard output.</p>
-            <p>4. Reset empty session when you want a clean run.</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <NudgeRail
           sessionId={displaySessionId}
           currentMode={currentSnapshot.conversationState.currentMode}
@@ -503,19 +436,48 @@ export function InterviewReplay({
           surfacedCue={currentSnapshot.surfaceCue}
           currentDecision={currentSnapshot.decisionLogEntry}
         />
-        <ThreadBank
-          sessionId={displaySessionId}
-          unresolvedThreads={currentSnapshot.unresolvedThreads}
-          turnCount={currentSnapshot.conversationState.turnCount}
-        />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <PresenceDecisionLog
           currentDecision={currentSnapshot.decisionLogEntry}
           guardDecisions={currentSnapshot.guardDecisions}
           recentDecisions={recentDecisions}
         />
+      </div>
+
+      <section className="panel p-6">
+        <p className="eyebrow">Recall candidates</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {transcriptOrganization.recallCandidates.length > 0 ? (
+            transcriptOrganization.recallCandidates.slice(0, 4).map((candidate) => (
+              <article
+                key={candidate.id}
+                className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-medium text-stone-900">
+                    {candidate.label}
+                  </p>
+                  <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] uppercase tracking-[0.14em] text-amber-900">
+                    {candidate.readiness.replaceAll("_", " ")}
+                  </span>
+                </div>
+                <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                  {candidate.sourceKind.replaceAll("_", " ")} | {candidate.recency} | debt{" "}
+                  {candidate.completionDebtScore}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-stone-600">
+                  {candidate.reason}
+                </p>
+              </article>
+            ))
+          ) : (
+            <p className="text-sm text-stone-600">
+              No recall candidates are ready yet.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <div className="grid gap-6">
         <TopicMap
           sessionId={displaySessionId}
           coveredVeins={currentSnapshot.conversationState.coveredVeins}
