@@ -78,8 +78,105 @@ type StoredListeningDraft = {
   customScores: ListeningScoreDraft;
 };
 
+type PreviewSignalTone = "stone" | "amber" | "emerald" | "rose";
+
+type PreviewSignal = {
+  label: string;
+  tone: PreviewSignalTone;
+};
+
 function normalizeTranscript(value: string) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function formatSignalLabel(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function buildCueSignals(
+  analysis: ReturnType<typeof analyzeReplayCommittedTurn>,
+  memory: ReturnType<typeof extractReplayTurnMemory>,
+): PreviewSignal[] {
+  const signals: PreviewSignal[] = [];
+
+  if (analysis.cuePotential !== "low") {
+    signals.push({
+      label: `${formatSignalLabel(analysis.cuePotential)} cue potential`,
+      tone: "amber",
+    });
+  }
+
+  if (analysis.threadAction !== "none") {
+    signals.push({
+      label: `${formatSignalLabel(analysis.threadAction)} thread`,
+      tone: "stone",
+    });
+  }
+
+  for (const cue of memory.unresolvedThreadCues) {
+    signals.push({
+      label: formatSignalLabel(cue),
+      tone: "amber",
+    });
+  }
+
+  for (const tension of memory.contradictionSignals) {
+    signals.push({
+      label: formatSignalLabel(tension),
+      tone: "rose",
+    });
+  }
+
+  if (analysis.interruption.interruptedPreviousTurn) {
+    signals.push({
+      label: "previous speaker cut off",
+      tone: "rose",
+    });
+  }
+
+  return Array.from(new Map(signals.map((signal) => [signal.label, signal])).values());
+}
+
+function buildIdeaSignals(
+  memory: ReturnType<typeof extractReplayTurnMemory>,
+): PreviewSignal[] {
+  const signals: PreviewSignal[] = [];
+
+  for (const theme of memory.themes) {
+    signals.push({
+      label: `theme: ${formatSignalLabel(theme)}`,
+      tone: "stone",
+    });
+  }
+
+  for (const entity of memory.entities) {
+    signals.push({
+      label: `entity: ${entity}`,
+      tone: "emerald",
+    });
+  }
+
+  if (memory.memoryKind !== "none") {
+    signals.push({
+      label: `${formatSignalLabel(memory.memoryKind)} memory`,
+      tone: "stone",
+    });
+  }
+
+  return Array.from(new Map(signals.map((signal) => [signal.label, signal])).values());
+}
+
+function getSignalChipClassName(tone: PreviewSignalTone) {
+  switch (tone) {
+    case "amber":
+      return "bg-amber-100 text-amber-950";
+    case "emerald":
+      return "bg-emerald-100 text-emerald-950";
+    case "rose":
+      return "bg-rose-100 text-rose-950";
+    default:
+      return "bg-stone-100 text-stone-800";
+  }
 }
 
 function buildDraftFromSegments(segments: ListeningSegment[]) {
@@ -237,6 +334,8 @@ export function ReplayListeningSandbox({
   );
   const [error, setError] = useState<string | null>(null);
   const [lastCommit, setLastCommit] = useState<ListeningLastCommit | null>(null);
+  const [lastHeardText, setLastHeardText] = useState("");
+  const [lastHeardAt, setLastHeardAt] = useState<string | null>(null);
   const [wasRestored, setWasRestored] = useState(false);
   const [segmentsExpanded, setSegmentsExpanded] = useState(false);
 
@@ -288,6 +387,33 @@ export function ReplayListeningSandbox({
     scoreMode,
     speaker,
   ]);
+  const liveCueSignals = useMemo(
+    () =>
+      livePreview
+        ? buildCueSignals(livePreview.analysis, livePreview.memory)
+        : [],
+    [livePreview],
+  );
+  const liveIdeaSignals = useMemo(
+    () => (livePreview ? buildIdeaSignals(livePreview.memory) : []),
+    [livePreview],
+  );
+  const lastHeardTimestampLabel = lastHeardAt
+    ? new Date(lastHeardAt).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : "Nothing heard yet";
+  const micMonitorLabel = isListening
+    ? "Mic live"
+    : availability === "available"
+      ? "Ready to listen"
+      : availability === "unsupported"
+        ? "Mic unavailable"
+        : availability === "error"
+          ? "Mic error"
+          : "Checking mic";
 
   useEffect(() => {
     committedTranscriptRef.current = draftText;
@@ -419,6 +545,7 @@ export function ReplayListeningSandbox({
       }
 
       const normalizedFinalChunk = normalizeTranscript(finalChunk);
+      const normalizedInterimChunk = normalizeTranscript(interimChunk);
 
       if (normalizedFinalChunk) {
         const nextSegment = createListeningSegment(
@@ -434,9 +561,16 @@ export function ReplayListeningSandbox({
         setStatusMessage(
           "Captured a finalized speech segment and appended it into the editable draft.",
         );
+        setLastHeardText(normalizedFinalChunk);
+        setLastHeardAt(new Date().toISOString());
       }
 
-      setInterimText(normalizeTranscript(interimChunk));
+      if (normalizedInterimChunk) {
+        setLastHeardText(normalizedInterimChunk);
+        setLastHeardAt(new Date().toISOString());
+      }
+
+      setInterimText(normalizedInterimChunk);
       setError(null);
     };
 
@@ -466,7 +600,21 @@ export function ReplayListeningSandbox({
     setStatusMessage(
       "Listening started. Interim speech may flicker. Finalized speech segments will append into the editable draft.",
     );
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (startError) {
+      recognitionRef.current = null;
+      setAvailability("error");
+      setIsListening(false);
+      setStatusMessage(
+        "Could not start browser speech recognition. Use the typed draft fallback or retry listening.",
+      );
+      setError(
+        startError instanceof Error
+          ? `Recognition start failed: ${startError.message}`
+          : "Recognition start failed.",
+      );
+    }
   }
 
   function handleStopListening() {
@@ -631,6 +779,8 @@ export function ReplayListeningSandbox({
     setCustomScores(sandboxDefaults);
     setError(null);
     setLastCommit(null);
+    setLastHeardText("");
+    setLastHeardAt(null);
     setWasRestored(false);
     setStatusMessage("Cleared the entire sandbox session.");
     try {
@@ -727,7 +877,7 @@ export function ReplayListeningSandbox({
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
           <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
             Session state
@@ -738,16 +888,30 @@ export function ReplayListeningSandbox({
         </article>
         <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
           <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-            Browser support
+            Mic monitor
           </p>
           <p className="mt-2 text-lg font-semibold text-stone-900">
-            {availability === "unknown"
-              ? "Checking"
-              : availability === "available"
-                ? "Available here"
-                : availability === "unsupported"
-                  ? "Unavailable here"
-                  : "Error state"}
+            {micMonitorLabel}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-stone-600">
+            {availability === "available"
+              ? "Browser recognition is available in this tab."
+              : availability === "unsupported"
+                ? "This browser cannot expose speech recognition here."
+                : availability === "error"
+                  ? "Recognition is in an error state. Retry or type instead."
+                  : "Checking browser speech support."}
+          </p>
+        </article>
+        <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
+          <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+            Latest heard
+          </p>
+          <p className="mt-2 text-sm font-medium leading-6 text-stone-900">
+            {lastHeardText || "Waiting for speech or typed input."}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-stone-600">
+            {lastHeardTimestampLabel}
           </p>
         </article>
         <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
@@ -781,14 +945,24 @@ export function ReplayListeningSandbox({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-              Live sorting preview
+              Live cue + idea sorting
             </p>
             <p className="mt-1 text-sm leading-6 text-stone-700">
-              Updates while you speak or type. This preview is not committed into replay yet.
+              Updates while you speak or type so you can see what the mic is hearing and how it is being sorted before commit.
             </p>
           </div>
-          <span className="rounded-full bg-stone-100 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-stone-700">
-            {livePreview ? "Preview active" : "Waiting for input"}
+          <span
+            className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.14em] ${
+              isListening
+                ? "bg-emerald-100 text-emerald-950"
+                : "bg-stone-100 text-stone-700"
+            }`}
+          >
+            {isListening
+              ? "Listening live"
+              : livePreview
+                ? "Preview active"
+                : "Waiting for input"}
           </span>
         </div>
 
@@ -830,41 +1004,68 @@ export function ReplayListeningSandbox({
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
                 <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-                  Themes
+                  Cue ideas
                 </p>
-                <p className="mt-2 text-sm leading-6 text-stone-800">
-                  {livePreview.memory.themes.join(", ") || "None yet"}
-                </p>
+                {liveCueSignals.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {liveCueSignals.map((signal) => (
+                      <span
+                        key={signal.label}
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${getSignalChipClassName(signal.tone)}`}
+                      >
+                        {signal.label}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-stone-800">
+                    No cue-worthy pressure yet. Keep speaking or type more detail.
+                  </p>
+                )}
               </article>
               <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
                 <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-                  Open threads
+                  Ideas spotted
                 </p>
-                <p className="mt-2 text-sm leading-6 text-stone-800">
-                  {livePreview.memory.unresolvedThreadCues.join(", ") || "None yet"}
-                </p>
-              </article>
-              <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
-                <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-                  Claims
-                </p>
-                <p className="mt-2 text-sm leading-6 text-stone-800">
-                  {livePreview.memory.claims[0] ?? "None yet"}
-                </p>
-              </article>
-              <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
-                <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-                  Tension cues
-                </p>
-                <p className="mt-2 text-sm leading-6 text-stone-800">
-                  {livePreview.memory.contradictionSignals.join(", ") || "None yet"}
-                </p>
+                {livePreview.memory.claims[0] ? (
+                  <p className="mt-2 text-sm leading-6 text-stone-800">
+                    {livePreview.memory.claims[0]}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-stone-800">
+                    No stable claim yet.
+                  </p>
+                )}
+                {liveIdeaSignals.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {liveIdeaSignals.map((signal) => (
+                      <span
+                        key={signal.label}
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${getSignalChipClassName(signal.tone)}`}
+                      >
+                        {signal.label}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {livePreview.analysis.affective.triggerTerms.filter(
+                  (term) => term.tier !== "intensifier",
+                ).length > 0 ? (
+                  <p className="mt-3 text-xs leading-5 text-stone-600">
+                    Trigger words:{" "}
+                    {livePreview.analysis.affective.triggerTerms
+                      .filter((term) => term.tier !== "intensifier")
+                      .slice(0, 4)
+                      .map((term) => term.term)
+                      .join(", ")}
+                  </p>
+                ) : null}
               </article>
             </div>
           </>
         ) : (
           <p className="mt-4 text-sm leading-6 text-stone-600">
-            Start listening or type in the draft box to see themes, claims, open threads, and tension cues sort live before you commit anything.
+            Start listening or type in the draft box to see live cue ideas and idea sorting before you commit anything.
           </p>
         )}
       </div>
