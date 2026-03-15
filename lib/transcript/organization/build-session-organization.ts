@@ -4,7 +4,6 @@ import { buildReplayDossierLexicon } from "@/lib/transcript/lexical-tiers";
 import { analyzeReplayCommittedTurn } from "@/lib/transcript/turn-analysis";
 import { extractReplayTurnMemory } from "@/lib/transcript/turn-memory";
 import { buildTranscriptCompletionDebt } from "@/lib/transcript/organization/build-completion-debt";
-import { buildTranscriptRetrievalRecords } from "@/lib/transcript/organization/build-retrieval-records";
 import {
   buildAnnotationsFromReplayMetadata,
 } from "@/lib/transcript/organization/from-replay-metadata";
@@ -694,7 +693,6 @@ export function buildReplayTranscriptOrganization(
     sourceMetadataByTurnId,
     annotations,
     annotationsByTurnId,
-    retrievalRecords: buildTranscriptRetrievalRecords(turns, annotations),
     emergingThemes,
     openThreads,
     notableClaims,

@@ -107,23 +107,11 @@ export interface TranscriptRecallCandidate {
   reason: string;
 }
 
-export interface TranscriptRetrievalRecord {
-  id: string;
-  sessionId: string;
-  itemKind: "turn" | "annotation";
-  turnId: string;
-  annotationId: string | null;
-  annotationKind: TranscriptDerivedAnnotationKind | null;
-  lookupText: string;
-  spanRefs: TranscriptSpanRef[];
-}
-
 export interface TranscriptOrganizationSnapshot {
   sessionId: string | null;
   sourceMetadataByTurnId: Record<string, TranscriptOrganizationSourceMetadata>;
   annotations: TranscriptDerivedAnnotation[];
   annotationsByTurnId: Record<string, TranscriptDerivedAnnotation[]>;
-  retrievalRecords: TranscriptRetrievalRecord[];
   emergingThemes: TranscriptOrganizationBucketItem[];
   openThreads: TranscriptOrganizationBucketItem[];
   notableClaims: TranscriptOrganizationBucketItem[];

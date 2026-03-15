@@ -275,40 +275,6 @@ assert.deepEqual(
   manualOrganization.annotations.map((annotation) => annotation.kind),
   ["theme", "theme", "theme", "claim"],
 );
-assert.deepEqual(
-  manualOrganization.retrievalRecords.map((record) => ({
-    itemKind: record.itemKind,
-    annotationKind: record.annotationKind,
-    lookupText: record.lookupText,
-  })),
-  [
-    {
-      itemKind: "turn",
-      annotationKind: null,
-      lookupText: affectiveText,
-    },
-    {
-      itemKind: "annotation",
-      annotationKind: "theme",
-      lookupText: "risk",
-    },
-    {
-      itemKind: "annotation",
-      annotationKind: "theme",
-      lookupText: "family",
-    },
-    {
-      itemKind: "annotation",
-      annotationKind: "theme",
-      lookupText: "emotion",
-    },
-    {
-      itemKind: "annotation",
-      annotationKind: "claim",
-      lookupText: affectiveText,
-    },
-  ],
-);
 
 const dossierHandoff = buildMockHandoff();
 const dossierOrganization = buildReplayTranscriptOrganization(
