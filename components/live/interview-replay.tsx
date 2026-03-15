@@ -6,41 +6,20 @@ import { NudgeRail } from "@/components/live/nudge-rail";
 import { PresenceDecisionLog } from "@/components/live/presence-decision-log";
 import { ConversationMemoryPanel } from "@/components/live/conversation-memory-panel";
 import { ReplayListeningSandbox } from "@/components/live/replay-listening-sandbox";
-import { ReplayProofSummary } from "@/components/live/replay-proof-summary";
 import { ReplayTranscriptInput } from "@/components/live/replay-transcript-input";
 import { ReplayUpdatesPanel } from "@/components/live/replay-updates-panel";
-import { ReplayValidationGuide } from "@/components/live/replay-validation-guide";
 import { ThreadBank } from "@/components/live/thread-bank";
 import { TopicMap } from "@/components/live/topic-map";
-import {
-  getReplayFixtureDefinition,
-  replayFixtures,
-  type ReplayFixtureDefinition,
-} from "@/lib/mock/replay-fixtures";
 import { transcriptTurnSchema } from "@/lib/schemas/transcript";
 import { buildInterviewSessionTimeline } from "@/lib/state/interview-session-timeline";
 import {
   appendReplayTranscriptTurns,
-  importReplayTranscriptTurnDrafts,
   importReplayTranscriptTurns,
   parseReplayCommittedTurnMetadataRecord,
   type ReplayTranscriptTurnDraft,
   type ReplayCommittedTurnMetadata,
 } from "@/lib/transcript/manual-turns";
 import { buildReplayTranscriptOrganization } from "@/lib/transcript/organization/build-session-organization";
-import {
-  buildInitialProofSession,
-  buildProofCompactSummary,
-  buildProofJsonSummary,
-  buildProofMarkdownSummary,
-  hydrateProofSession,
-  setActiveProofFixture,
-  summarizeProofSession,
-  updateCheckpointReview,
-  updateFixtureAssessment,
-  type ReplayCheckpointStatus,
-  type ReplayFixtureAssessment,
-} from "@/lib/replay/proof-session";
 
 type InterviewReplayProps = {
   displaySessionId: string;
@@ -52,8 +31,6 @@ type InterviewReplayProps = {
 
 const INITIAL_SNAPSHOT_INDEX = 0;
 const AUTOPLAY_INTERVAL_MS = 1800;
-const proofSessionStorageKey = (engineSessionId: string) =>
-  `cuedup:replay-proof-session:${engineSessionId}`;
 const replaySessionStorageKey = (engineSessionId: string) =>
   `cuedup:replay-session:${engineSessionId}`;
 
@@ -62,8 +39,6 @@ type ReplayAppendSource = "manual turn" | "JSON import" | "sandbox commit";
 type ReplaySourceState = {
   label: string;
   detail: string;
-  activeFixtureId: string | null;
-  isFixtureRunModified: boolean;
 };
 
 function isReplaySourceState(value: unknown): value is ReplaySourceState {
@@ -75,10 +50,7 @@ function isReplaySourceState(value: unknown): value is ReplaySourceState {
 
   return (
     typeof candidate.label === "string" &&
-    typeof candidate.detail === "string" &&
-    (typeof candidate.activeFixtureId === "string" ||
-      candidate.activeFixtureId === null) &&
-    typeof candidate.isFixtureRunModified === "boolean"
+    typeof candidate.detail === "string"
   );
 }
 
@@ -96,7 +68,6 @@ function readStoredReplaySession(engineSessionId: string) {
       turns?: unknown;
       currentSnapshotIndex?: unknown;
       replaySource?: unknown;
-      selectedCheckpointId?: unknown;
       turnMetadata?: unknown;
       turnSources?: unknown;
     };
@@ -116,10 +87,6 @@ function readStoredReplaySession(engineSessionId: string) {
       turns: parsedTurns.data,
       currentSnapshotIndex: storedSnapshotIndex,
       replaySource: parsed.replaySource,
-      selectedCheckpointId:
-        typeof parsed.selectedCheckpointId === "string"
-          ? parsed.selectedCheckpointId
-          : null,
       turnMetadata: parseReplayCommittedTurnMetadataRecord(
         typeof parsed.turnMetadata !== "undefined"
           ? parsed.turnMetadata
@@ -133,11 +100,9 @@ function readStoredReplaySession(engineSessionId: string) {
 
 function buildSeededReplaySource(): ReplaySourceState {
   return {
-    label: "Seeded mock session",
+    label: "Empty replay session",
     detail:
-      "Seeded mock transcript restored. Replay is back at the pre-turn baseline for the canonical mock session.",
-    activeFixtureId: null,
-    isFixtureRunModified: false,
+      "Replay starts empty. Use the listening sandbox, manual transcript input, or JSON import to feed real speech into the current replay-local turn stream.",
   };
 }
 
@@ -160,10 +125,6 @@ export function InterviewReplay({
   const [replaySource, setReplaySource] = useState<ReplaySourceState>(
     buildSeededReplaySource,
   );
-  const [proofSession, setProofSession] = useState(() =>
-    buildInitialProofSession(replayFixtures),
-  );
-  const [selectedCheckpointId, setSelectedCheckpointId] = useState<string | null>(null);
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
   const visibleReplayTurns = useMemo(
@@ -209,55 +170,9 @@ export function InterviewReplay({
   const recentDecisions = timeline.decisionLog
     .slice(Math.max(0, currentSnapshotIndex - 5), currentSnapshotIndex)
     .reverse();
-  const activeFixture = replaySource.activeFixtureId
-    ? getReplayFixtureDefinition(replaySource.activeFixtureId)
-    : null;
-  const leadThread = currentSnapshot.unresolvedThreads[0] ?? null;
-  const topMove = currentSnapshot.topMoves[0] ?? null;
-  const proofSummary = useMemo(
-    () => summarizeProofSession(replayFixtures, proofSession),
-    [proofSession],
-  );
-  const markdownProofSummary = useMemo(
-    () => buildProofMarkdownSummary(replayFixtures, proofSession),
-    [proofSession],
-  );
-  const compactProofSummary = useMemo(
-    () => buildProofCompactSummary(replayFixtures, proofSession),
-    [proofSession],
-  );
-  const jsonProofSummary = useMemo(
-    () => buildProofJsonSummary(replayFixtures, proofSession),
-    [proofSession],
-  );
-  const activeFixtureSummary = activeFixture
-    ? proofSummary.fixtures.find((fixture) => fixture.fixtureId === activeFixture.id) ?? null
-    : null;
-  const currentAssessment = activeFixtureSummary?.assessment ?? null;
-  const checkpointReviews = activeFixture
-    ? (proofSession.fixtures[activeFixture.id]?.checkpointReviews ?? {})
-    : {};
-  const currentCheckpoint =
-    activeFixture?.checkpoints.find(
-      (checkpoint) =>
-        currentSnapshotIndex >= checkpoint.targetStartSnapshotIndex &&
-        currentSnapshotIndex <= checkpoint.targetEndSnapshotIndex,
-    ) ?? null;
-  const selectedCheckpoint =
-    activeFixture?.checkpoints.find(
-      (checkpoint) => checkpoint.id === selectedCheckpointId,
-    ) ?? null;
-  void currentCheckpoint;
-  void selectedCheckpoint;
-  const workspaceModeLabel =
-    activeFixture || replaySource.label.startsWith("Fixture:")
-      ? ("replay" as const)
-      : ("manual" as const);
-  const listeningStateLabel = activeFixture
-    ? "Fixture playback"
-    : replaySource.label === "Seeded mock session"
-      ? "Idle"
-      : "Listening sandbox ready";
+  const workspaceModeLabel = "manual" as const;
+  const listeningStateLabel =
+    replayLocalTurns.length > 0 ? "Replay-local stream active" : "Waiting for input";
   const currentTurnSignals = currentSnapshot.currentTurn
     ? transcriptOrganization.sourceMetadataByTurnId[
         currentSnapshot.currentTurn.id
@@ -276,40 +191,10 @@ export function InterviewReplay({
       setReplayTurnMetadata(storedReplaySession.turnMetadata);
       setCurrentSnapshotIndex(storedReplaySession.currentSnapshotIndex);
       setReplaySource(storedReplaySession.replaySource);
-      setSelectedCheckpointId(storedReplaySession.selectedCheckpointId);
       setRestoreNotice(
-        "Restored browser-local replay session. Review source, checkpoint focus, and snapshot position before continuing.",
-      );
-      setProofSession((currentSession) =>
-        setActiveProofFixture(
-          currentSession,
-          storedReplaySession.replaySource.activeFixtureId,
-        ),
+        "Restored browser-local replay session. Review source and snapshot position before continuing.",
       );
     });
-  }, [engineSessionId]);
-
-  useEffect(() => {
-    try {
-      const storedProofSession = window.localStorage.getItem(
-        proofSessionStorageKey(engineSessionId),
-      );
-
-      if (!storedProofSession) {
-        return;
-      }
-
-      startTransition(() => {
-        setProofSession(hydrateProofSession(replayFixtures, storedProofSession));
-        setRestoreNotice((currentNotice) =>
-          currentNotice
-            ? `${currentNotice} Proof session state was restored too.`
-            : "Restored browser-local proof session state.",
-        );
-      });
-    } catch {
-      // Browser-local proof persistence is best-effort only.
-    }
   }, [engineSessionId]);
 
   useEffect(() => {
@@ -321,7 +206,6 @@ export function InterviewReplay({
           turnMetadata: replayTurnMetadata,
           currentSnapshotIndex,
           replaySource,
-          selectedCheckpointId,
         }),
       );
     } catch {
@@ -333,45 +217,12 @@ export function InterviewReplay({
     replayLocalTurns,
     replayTurnMetadata,
     replaySource,
-    selectedCheckpointId,
   ]);
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        proofSessionStorageKey(engineSessionId),
-        JSON.stringify(proofSession),
-      );
-    } catch {
-      // Browser-local proof persistence is best-effort only.
-    }
-  }, [engineSessionId, proofSession]);
-
-  function buildFixtureReplaySource(fixture: ReplayFixtureDefinition): ReplaySourceState {
-    return {
-      label: `Fixture: ${fixture.label}`,
-      detail:
-        "Loaded fixture transcript. Replay-local turns were replaced, autoplay stopped, and the view jumped to the latest loaded snapshot.",
-      activeFixtureId: fixture.id,
-      isFixtureRunModified: false,
-    };
-  }
-
   function buildReplaySourceAfterAppend(kind: ReplayAppendSource) {
-    if (activeFixture) {
-      return {
-        label: `Fixture: ${activeFixture.label} (modified)`,
-        detail: `${kind} appended to the loaded fixture run. This remains useful for exploration, but it is no longer a clean fixture proof baseline.`,
-        activeFixtureId: activeFixture.id,
-        isFixtureRunModified: true,
-      } satisfies ReplaySourceState;
-    }
-
     return {
       label: "Replay-local transcript",
-      detail: `${kind} appended to the current replay-local turn stream. This is exploratory replay state, not a clean fixture proof run.`,
-      activeFixtureId: null,
-      isFixtureRunModified: false,
+      detail: `${kind} appended to the current replay-local turn stream.`,
     } satisfies ReplaySourceState;
   }
 
@@ -379,13 +230,12 @@ export function InterviewReplay({
     nextTurns: TranscriptTurn[],
     nextSnapshotIndex: number,
     nextReplaySource?: ReplaySourceState,
-    nextSelectedCheckpointId?: string | null,
     nextReplayTurnMetadata?: Record<string, ReplayCommittedTurnMetadata>,
   ) {
     startTransition(() => {
       // Replacing replay-local turns intentionally discards prior replay-only
-      // fixture/import/manual state so the timeline and guard output rebuild
-      // from one canonical local stream only.
+      // manual/import state so the timeline and guard output rebuild from one
+      // canonical local stream only.
       setReplayLocalTurns(nextTurns);
       if (nextReplayTurnMetadata) {
         setReplayTurnMetadata(nextReplayTurnMetadata);
@@ -394,15 +244,6 @@ export function InterviewReplay({
       setIsAutoplaying(false);
       if (nextReplaySource) {
         setReplaySource(nextReplaySource);
-        setProofSession((currentSession) =>
-          setActiveProofFixture(
-            currentSession,
-            nextReplaySource.activeFixtureId,
-          ),
-        );
-      }
-      if (typeof nextSelectedCheckpointId !== "undefined") {
-        setSelectedCheckpointId(nextSelectedCheckpointId);
       }
     });
   }
@@ -476,7 +317,6 @@ export function InterviewReplay({
       appendResult.turns,
       appendResult.turns.length,
       buildReplaySourceAfterAppend(source),
-      undefined,
       {
         ...replayTurnMetadata,
         ...appendResult.metadata,
@@ -495,7 +335,6 @@ export function InterviewReplay({
       appendResult.turns,
       appendResult.turns.length,
       buildReplaySourceAfterAppend("JSON import"),
-      undefined,
       {
         ...replayTurnMetadata,
         ...appendResult.metadata,
@@ -503,114 +342,25 @@ export function InterviewReplay({
     );
   }
 
-  function handleLoadFixture(fixtureId: string) {
-    const fixture = replayFixtures.find((item) => item.id === fixtureId);
-
-    if (!fixture) {
-      throw new Error("Replay fixture was not found.");
-    }
-
-    const appendResult = importReplayTranscriptTurnDrafts(
-      [],
-      engineSessionId,
-      fixture.transcript,
-      "fixture_load",
-    );
-
-    // Fixture loads intentionally replace the replay-local turn stream rather
-    // than append to it, so the view should jump straight to the latest loaded
-    // snapshot instead of showing the empty seeded state.
-    applyReplayLocalTurns(
-      appendResult.turns,
-      appendResult.turns.length,
-      buildFixtureReplaySource(fixture),
-      fixture.checkpoints[0]?.id ?? null,
-      appendResult.metadata,
-    );
-  }
-
   function handleResetToSeededSession() {
-    // Reset-to-seeded intentionally behaves differently from fixture loading:
-    // it restores the seeded mock stream and returns replay to the pre-turn start.
     applyReplayLocalTurns(
       transcriptTurns,
       INITIAL_SNAPSHOT_INDEX,
       buildSeededReplaySource(),
-      null,
       {},
     );
-  }
-
-  function handleAssessmentChange(assessment: ReplayFixtureAssessment) {
-    if (!activeFixture) {
-      return;
-    }
-
-    setProofSession((currentSession) =>
-      updateFixtureAssessment(currentSession, activeFixture.id, assessment),
-    );
-  }
-
-  function handleCheckpointStatusChange(
-    checkpointId: string,
-    status: ReplayCheckpointStatus,
-  ) {
-    if (!activeFixture) {
-      return;
-    }
-
-    setProofSession((currentSession) =>
-      updateCheckpointReview(currentSession, activeFixture.id, checkpointId, {
-        status,
-      }),
-    );
-    setSelectedCheckpointId(checkpointId);
-  }
-
-  function handleCheckpointNoteChange(checkpointId: string, note: string) {
-    if (!activeFixture) {
-      return;
-    }
-
-    setProofSession((currentSession) =>
-      updateCheckpointReview(currentSession, activeFixture.id, checkpointId, {
-        note,
-      }),
-    );
-  }
-
-  function handleCheckpointJump(checkpointId: string) {
-    if (!activeFixture) {
-      return;
-    }
-
-    const checkpoint = activeFixture.checkpoints.find(
-      (item) => item.id === checkpointId,
-    );
-
-    if (!checkpoint) {
-      return;
-    }
-
-    startTransition(() => {
-      setCurrentSnapshotIndex(checkpoint.targetStartSnapshotIndex);
-      setIsAutoplaying(false);
-      setSelectedCheckpointId(checkpointId);
-    });
   }
 
   function handleClearBrowserLocalReplayState() {
     try {
       window.localStorage.removeItem(replaySessionStorageKey(engineSessionId));
-      window.localStorage.removeItem(proofSessionStorageKey(engineSessionId));
     } catch {
       // Browser-local replay persistence is best-effort only.
     }
 
     startTransition(() => {
-      setProofSession(buildInitialProofSession(replayFixtures));
       setRestoreNotice(
-        "Cleared browser-local replay and proof state. Use Clear session inside the listening sandbox if you also want to wipe the sandbox draft.",
+        "Cleared browser-local replay state. Use Clear session inside the listening sandbox if you also want to wipe the sandbox draft.",
       );
     });
     handleResetToSeededSession();
@@ -623,12 +373,13 @@ export function InterviewReplay({
           <div className="max-w-4xl">
             <p className="eyebrow">Replay cockpit</p>
             <h2 className="mt-2 text-3xl font-semibold text-stone-900">
-              Debug transcript and proof workflow
+              Debug transcript workspace
             </h2>
             <p className="mt-3 text-sm leading-6 text-stone-700">
               One replay-local turn stream feeds the deterministic timeline,
-              engine, and Presence Guard. Fixtures, JSON import, manual append,
-              and sandbox transcript commits all converge here.
+              engine, and Presence Guard. Listening sandbox commits, manual
+              append, and JSON import all converge here without any built-in
+              story fixtures.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -644,7 +395,7 @@ export function InterviewReplay({
               onClick={handleClearBrowserLocalReplayState}
               className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
             >
-              Wipe replay/proof restore state
+              Wipe replay restore state
             </button>
           </div>
         </div>
@@ -718,42 +469,28 @@ export function InterviewReplay({
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <ReplayTranscriptInput
-          fixtures={replayFixtures}
-          activeFixtureId={activeFixture?.id ?? null}
           replaySourceLabel={replaySource.label}
           replaySourceDetail={replaySource.detail}
           onAppend={handleAppendTurn}
           onImport={handleImportTranscript}
-          onLoadFixture={handleLoadFixture}
-          onResetToSeededSession={handleResetToSeededSession}
+          onResetSession={handleResetToSeededSession}
         />
-        <div className="space-y-6">
-          <ReplayValidationGuide
-            activeFixture={activeFixture}
-            replaySourceLabel={replaySource.label}
-            replaySourceDetail={replaySource.detail}
-            currentSnapshotIndex={currentSnapshotIndex}
-            totalTurns={replayLocalTurns.length}
-            surfacedCue={currentSnapshot.surfaceCue}
-            topMove={topMove}
-            leadThread={leadThread}
-            currentDecision={currentSnapshot.decisionLogEntry}
-            assessment={currentAssessment}
-            onAssessmentChange={handleAssessmentChange}
-            isFixtureRunModified={replaySource.isFixtureRunModified}
-            fixtureReviewStatus={activeFixtureSummary?.reviewStatus ?? null}
-            checkpointReviews={checkpointReviews}
-            selectedCheckpointId={selectedCheckpointId}
-            onCheckpointStatusChange={handleCheckpointStatusChange}
-            onCheckpointNoteChange={handleCheckpointNoteChange}
-            onCheckpointJump={handleCheckpointJump}
-          />
-          <ReplayProofSummary
-            summary={proofSummary}
-            compactSummary={compactProofSummary}
-            markdownSummary={markdownProofSummary}
-            jsonSummary={jsonProofSummary}
-          />
+        <div className="panel p-6">
+          <p className="eyebrow">Testing path</p>
+          <h2 className="mt-2 text-2xl font-semibold text-stone-900">
+            Real speech only
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-stone-700">
+            This replay surface no longer ships with canned Gemini-style story
+            runs. Start listening, speak into your mic, point the laptop at TV
+            audio, or paste/import the transcript you actually want to inspect.
+          </p>
+          <div className="mt-5 space-y-3 rounded-2xl border border-stone-200 bg-stone-50/70 p-4 text-sm leading-6 text-stone-700">
+            <p>1. Use Listening sandbox to capture speech locally.</p>
+            <p>2. Commit the draft into replay when the text looks right.</p>
+            <p>3. Step turns, inspect memory, cues, threads, and guard output.</p>
+            <p>4. Reset empty session when you want a clean run.</p>
+          </div>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chromium, type Page } from "playwright";
+import { chromium, type Locator, type Page } from "playwright";
 
 const REPLAY_URL =
   process.env.CUEDUP_REPLAY_URL ??
@@ -9,182 +9,68 @@ function collapseWhitespace(value: string | null) {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
-async function sectionTextByHeading(page: Page, heading: string) {
-  const section = page
-    .getByRole("heading", { name: heading })
-    .locator("xpath=ancestor::section[1] | ancestor::aside[1]")
+async function regionText(locator: Locator) {
+  return collapseWhitespace(await locator.textContent());
+}
+
+function headingRegion(page: Page, heading: string) {
+  return page
+    .getByText(heading, { exact: true })
+    .locator("xpath=ancestor::article[1] | ancestor::section[1] | ancestor::aside[1]")
     .first();
-
-  return collapseWhitespace(await section.textContent());
 }
 
-async function replaySnapshotIndex(page: Page) {
-  const transcriptPanel = collapseWhitespace(
-    await page.locator("#transcript-replay").textContent(),
-  );
-  const match = transcriptPanel.match(/Snapshot (\d+) \/ \d+/);
+async function clickButton(page: Page, name: string) {
+  const button = page.getByRole("button", { name, exact: true });
 
-  assert.ok(match, "Replay snapshot label was not visible.");
-
-  return Number.parseInt(match[1]!, 10);
+  await button.waitFor({ state: "visible", timeout: 30_000 });
+  await button.evaluate((element) => {
+    (element as HTMLButtonElement).click();
+  });
 }
 
-async function gotoSnapshot(page: Page, targetSnapshotIndex: number) {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const currentSnapshotIndex = await replaySnapshotIndex(page);
-
-    if (currentSnapshotIndex === targetSnapshotIndex) {
-      return;
-    }
-
-    await page
-      .getByRole("button", {
-        name: currentSnapshotIndex > targetSnapshotIndex ? "Previous" : "Next turn",
-      })
-      .click();
-    await page.waitForTimeout(120);
-  }
-
-  throw new Error(`Unable to reach snapshot ${targetSnapshotIndex}.`);
+async function waitForReplayReady(page: Page) {
+  await page.locator("#conversation-workspace").waitFor({
+    state: "visible",
+    timeout: 30_000,
+  });
+  await page
+    .getByRole("textbox", { name: "Editable draft transcript" })
+    .waitFor({ state: "visible", timeout: 30_000 });
 }
 
-function assertIncludesAny(
-  haystack: string,
-  needles: string[],
-  message: string,
-) {
-  assert.ok(
-    needles.some((needle) => haystack.includes(needle)),
-    `${message} Expected one of: ${needles.join(", ")}`,
+async function clearReplayState(page: Page) {
+  await clickButton(page, "Wipe replay restore state");
+  await page.waitForFunction(
+    () => {
+      const workspace = document.querySelector("#conversation-workspace");
+      return (workspace?.textContent ?? "").includes("Empty replay session");
+    },
+    undefined,
+    { timeout: 10_000 },
   );
 }
 
-function assertSurfacePopulated(surfaceText: string, label: string) {
-  assert.ok(surfaceText.includes(label), `${label} section was not visible.`);
-  assert.ok(
-    !surfaceText.includes("No candidate next move is available yet."),
-    `${label} was visible but had no top move content.`,
+async function clearListeningSandbox(page: Page) {
+  await clickButton(page, "Clear session");
+  await page.waitForFunction(
+    () => {
+      const textarea = document.querySelector(
+        "textarea",
+      ) as HTMLTextAreaElement | null;
+      return textarea ? textarea.value.length === 0 : false;
+    },
+    undefined,
+    { timeout: 10_000 },
   );
 }
 
-async function loadFixture(page: Page, fixtureId: string) {
-  await page.getByRole("button", { name: fixtureId, exact: true }).click();
-  await page.waitForTimeout(300);
-  assert.equal(await replaySnapshotIndex(page), 16, `${fixtureId} did not load fully.`);
-}
-
-async function inspectThreadRevisitLater(page: Page) {
-  console.log("Inspecting thread-revisit-later");
-  await loadFixture(page, "thread-revisit-later");
-
-  await gotoSnapshot(page, 2);
-  const earlyThreadBank = await sectionTextByHeading(page, "Unresolved threads");
-  assert.ok(
-    earlyThreadBank.includes("Brother's relapse as the hidden risk lens"),
-    "Snapshot 2 did not visibly show the family/trust thread.",
-  );
-
-  for (const snapshotIndex of [9, 10, 11, 12]) {
-    await gotoSnapshot(page, snapshotIndex);
-
-    const transcript = collapseWhitespace(
-      await page.locator("#transcript-replay").textContent(),
-    );
-    const threadBank = await sectionTextByHeading(page, "Unresolved threads");
-    const nudgeRail = await sectionTextByHeading(page, "Operator nudge rail");
-    const presenceLog = await sectionTextByHeading(page, "Cue decisions");
-
-    assertIncludesAny(
-      `${transcript} ${threadBank} ${nudgeRail}`,
-      [
-        "Brother's relapse as the hidden risk lens",
-        "Nevada restructuring and worker trust",
-        "brother",
-        "trust",
-        "family",
-      ],
-      `Snapshot ${snapshotIndex} did not visibly keep the reactivated thread in play.`,
-    );
-    assertSurfacePopulated(nudgeRail, "Operator nudge rail");
-    assert.ok(
-      presenceLog.includes("Current turn evaluations"),
-      `Snapshot ${snapshotIndex} did not show populated Presence Guard evaluations.`,
-    );
-  }
-
-  await gotoSnapshot(page, 15);
-  const snapshot15Transcript = collapseWhitespace(
-    await page.locator("#transcript-replay").textContent(),
-  );
-  assert.ok(
-    snapshot15Transcript.includes(
-      "So the family thread and the labor thread are actually the same trust problem.",
-    ),
-    "Snapshot 15 did not visibly show the later-payoff trust connection.",
-  );
-
-  await gotoSnapshot(page, 16);
-  const snapshot16Transcript = collapseWhitespace(
-    await page.locator("#transcript-replay").textContent(),
-  );
-  assert.ok(
-    snapshot16Transcript.includes(
-      "That is the connection I resisted saying out loud for years.",
-    ),
-    "Snapshot 16 did not visibly show the later-payoff acknowledgment.",
-  );
-}
-
-async function inspectSaturationPlateauRepeat(page: Page) {
-  console.log("Inspecting saturation-plateau-repeat");
-  await loadFixture(page, "saturation-plateau-repeat");
-
-  for (const snapshotIndex of [9, 10, 11, 12]) {
-    await gotoSnapshot(page, snapshotIndex);
-
-    const nudgeRail = await sectionTextByHeading(page, "Operator nudge rail");
-    const presenceLog = await sectionTextByHeading(page, "Cue decisions");
-    const threadBank = await sectionTextByHeading(page, "Unresolved threads");
-
-    assertIncludesAny(
-      `${nudgeRail} ${presenceLog}`,
-      ["repetition", "tighten", "Top candidate repeated", "cooldown"],
-      `Snapshot ${snapshotIndex} did not visibly show repetition/tightening behavior.`,
-    );
-    assert.ok(
-      threadBank.includes("Unresolved threads"),
-      `Snapshot ${snapshotIndex} did not keep the thread bank visible.`,
-    );
-  }
-}
-
-async function inspectEvasiveRunPressure(page: Page) {
-  console.log("Inspecting evasive-run-pressure");
-  await loadFixture(page, "evasive-run-pressure");
-  await gotoSnapshot(page, 16);
-
-  const transcript = collapseWhitespace(
-    await page.locator("#transcript-replay").textContent(),
-  );
-  const proofGuide = await sectionTextByHeading(page, "Fixture proof guide");
-  const threadBank = await sectionTextByHeading(page, "Unresolved threads");
-
-  assert.ok(
-    transcript.includes("Yes, and I regret what that meant for trust."),
-    "Snapshot 16 did not visibly show the breakthrough answer text.",
-  );
-  assert.ok(
-    transcript.includes("Specificity high") && transcript.includes("Cue high"),
-    "Snapshot 16 did not visibly show the higher-signal committed-turn state.",
-  );
-  assert.ok(
-    proofGuide.includes("Breakthrough answer"),
-    "Snapshot 16 did not visibly keep the breakthrough checkpoint in focus.",
-  );
-  assert.ok(
-    threadBank.includes("Nevada restructuring and worker trust"),
-    "Snapshot 16 did not visibly keep the accountability/trust thread present.",
-  );
+async function captureWorkspaceSnapshot(page: Page) {
+  return {
+    workspace: await regionText(page.locator("#conversation-workspace")),
+    transcriptRail: await regionText(page.locator("#workspace-transcript-rail")),
+    recallQueue: await regionText(headingRegion(page, "Recall candidates")),
+  };
 }
 
 async function main() {
@@ -197,23 +83,81 @@ async function main() {
       waitUntil: "networkidle",
       timeout: 90_000,
     });
-    await page.getByRole("button", { name: "thread-revisit-later" }).waitFor({
-      state: "visible",
-      timeout: 30_000,
+    await waitForReplayReady(page);
+    await clearReplayState(page);
+    await clearListeningSandbox(page);
+
+    const draftBox = page.getByRole("textbox", {
+      name: "Editable draft transcript",
     });
+    await draftBox.fill("His relapse made risk feel personal.");
+    await clickButton(page, "Commit to replay");
 
-    await inspectThreadRevisitLater(page);
-    await inspectSaturationPlateauRepeat(page);
-    await inspectEvasiveRunPressure(page);
+    await page.waitForFunction(
+      (expectedText) => {
+        const transcriptRail = document.querySelector("#workspace-transcript-rail");
+        return (transcriptRail?.textContent ?? "").includes(expectedText);
+      },
+      "His relapse made risk feel personal.",
+      { timeout: 10_000 },
+    );
 
-    console.log("Replay checkpoint proof passed.");
+    const firstSnapshot = await captureWorkspaceSnapshot(page);
+    assert.ok(
+      firstSnapshot.workspace.includes("Replay-local transcript"),
+      "Workspace did not switch into replay-local transcript mode after commit.",
+    );
+    assert.ok(
+      firstSnapshot.transcriptRail.includes("His relapse made risk feel personal."),
+      "Transcript rail did not show the committed speech.",
+    );
+    assert.ok(
+      firstSnapshot.transcriptRail.includes("Listening sandbox draft"),
+      "Transcript rail did not show the listening sandbox source label.",
+    );
+    assert.ok(
+      firstSnapshot.workspace.includes("Emotion fear") ||
+        firstSnapshot.workspace.includes("Emotion neutral"),
+      "Current-turn analyzer did not render an emotion label.",
+    );
+    assert.ok(
+      firstSnapshot.workspace.includes("Completion"),
+      "Current-turn analyzer did not render completion status.",
+    );
+    assert.ok(
+      firstSnapshot.recallQueue.includes("risk") ||
+        firstSnapshot.recallQueue.includes("personal"),
+      "Recall queue did not populate after committing speech.",
+    );
+
+    await draftBox.fill("I changed my mind because");
+    await clickButton(page, "Commit to replay");
+
+    await page.waitForFunction(
+      () => {
+        const workspace = document.querySelector("#conversation-workspace");
+        return (workspace?.textContent ?? "").includes("I changed my mind because");
+      },
+      undefined,
+      { timeout: 10_000 },
+    );
+
+    const secondSnapshot = await captureWorkspaceSnapshot(page);
+    assert.ok(
+      secondSnapshot.workspace.includes("incomplete") ||
+        secondSnapshot.workspace.includes("truncated"),
+      "Second committed turn did not surface incomplete/truncated analysis.",
+    );
+
+    console.log("Replay speech-only proof passed.");
   } finally {
     await browser.close();
   }
 }
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
+  const message =
+    error instanceof Error ? error.stack ?? error.message : String(error);
 
   console.error(message);
   process.exitCode = 1;

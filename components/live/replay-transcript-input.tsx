@@ -3,17 +3,13 @@
 import { useState } from "react";
 import type { TranscriptTurn } from "@/types";
 import type { ReplayTranscriptTurnDraft } from "@/lib/transcript/manual-turns";
-import type { ReplayFixtureDefinition } from "@/lib/mock/replay-fixtures";
 
 type ReplayTranscriptInputProps = {
-  fixtures: ReplayFixtureDefinition[];
-  activeFixtureId: string | null;
   replaySourceLabel: string;
   replaySourceDetail: string;
   onAppend: (draft: ReplayTranscriptTurnDraft) => void;
   onImport: (rawTranscript: string) => void;
-  onLoadFixture: (fixtureId: string) => void;
-  onResetToSeededSession: () => void;
+  onResetSession: () => void;
 };
 
 const initialDraft: ReplayTranscriptTurnDraft = {
@@ -35,23 +31,18 @@ const speakerOptions: TranscriptTurn["speaker"][] = [
 ];
 
 export function ReplayTranscriptInput({
-  fixtures,
-  activeFixtureId,
   replaySourceLabel,
   replaySourceDetail,
   onAppend,
   onImport,
-  onLoadFixture,
-  onResetToSeededSession,
+  onResetSession,
 }: ReplayTranscriptInputProps) {
   const [draft, setDraft] = useState(initialDraft);
   const [rawTranscript, setRawTranscript] = useState("");
-  const [fixtureError, setFixtureError] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
   function clearAllErrors() {
-    setFixtureError(null);
     setManualError(null);
     setImportError(null);
   }
@@ -141,55 +132,6 @@ export function ReplayTranscriptInput({
             {replaySourceDetail}
           </p>
         </div>
-
-        <p className="eyebrow">Replay fixtures</p>
-        <h2 className="mt-2 text-2xl font-semibold text-stone-900">
-          Fixture loader
-        </h2>
-        <p className="mt-2 text-sm text-stone-600">
-          Replaces the current replay-local turn stream with a built-in fixture,
-          stops autoplay, and jumps to the latest loaded snapshot.
-        </p>
-        <div className="mt-5 flex flex-wrap gap-2">
-          {fixtures.map((fixture) => (
-            <button
-              key={fixture.id}
-              type="button"
-              onClick={() => {
-                try {
-                  onLoadFixture(fixture.id);
-                  clearAllErrors();
-                } catch (error) {
-                  setFixtureError(
-                    error instanceof Error
-                      ? error.message
-                      : "Unable to load fixture transcript.",
-                  );
-                }
-              }}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                activeFixtureId === fixture.id
-                  ? "border-amber-300 bg-amber-50 text-amber-900"
-                  : "border-stone-300 text-stone-700 hover:border-stone-400"
-              }`}
-            >
-              {fixture.label}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => {
-              onResetToSeededSession();
-              clearAllErrors();
-            }}
-            className="rounded-full border border-amber-300 px-4 py-2 text-sm font-medium text-amber-800 transition hover:border-amber-400"
-          >
-            Reset to seeded mock session
-          </button>
-        </div>
-        {fixtureError ? (
-          <p className="mt-4 text-sm text-rose-700">{fixtureError}</p>
-        ) : null}
       </div>
 
       <div className="mt-8 border-t border-stone-200 pt-8">
@@ -198,9 +140,9 @@ export function ReplayTranscriptInput({
           Manual transcript input
         </h2>
         <p className="mt-2 text-sm text-stone-600">
-          Appends one turn onto the current replay-local stream. If a fixture is
-          active, that fixture run becomes a modified exploratory run instead of
-          a clean proof baseline.
+          Appends one turn onto the current replay-local stream. Use this when
+          you want to type or paste the exact speech you just heard instead of
+          relying on canned transcripts.
         </p>
 
         <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
@@ -315,6 +257,16 @@ export function ReplayTranscriptInput({
           >
             Append turn
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              onResetSession();
+              clearAllErrors();
+            }}
+            className="ml-2 rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+          >
+            Reset empty session
+          </button>
         </form>
       </div>
 
@@ -328,7 +280,7 @@ export function ReplayTranscriptInput({
           </p>
           <p className="mt-2 text-sm text-stone-600">
             Appends a JSON transcript onto the current replay-local stream. Use
-            fixture load or seeded reset if you want replacement instead.
+            reset empty session first if you want to start clean.
           </p>
         </div>
 

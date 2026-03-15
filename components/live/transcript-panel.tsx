@@ -133,7 +133,7 @@ export function TranscriptPanel({
               </span>
               <span>{currentTurn.timestamp}</span>
               <span>
-                Input {currentTurnMetadata?.label ?? "Seeded or fixture transcript"}
+                Input {currentTurnMetadata?.label ?? "Replay-local transcript"}
               </span>
               <span>Replay {replaySourceLabel}</span>
               <span>Energy {currentTurn.energyScore.toFixed(2)}</span>
@@ -201,7 +201,7 @@ export function TranscriptPanel({
           </>
         ) : (
           <p className="mt-4 text-lg leading-8 text-stone-200">
-            Replay is seeded from the dossier handoff and waiting for the first
+            Replay starts empty and is waiting for the first committed
             transcript turn.
           </p>
         )}
@@ -226,7 +226,7 @@ export function TranscriptPanel({
                   <span>{speakerLabel(turn.speaker)}</span>
                   <span>{turn.timestamp}</span>
                   <span>
-                    {turnMetadata[turn.id]?.label ?? "Seeded or fixture transcript"}
+                    {turnMetadata[turn.id]?.label ?? "Replay-local transcript"}
                   </span>
                   <span>
                     {formatLabel(

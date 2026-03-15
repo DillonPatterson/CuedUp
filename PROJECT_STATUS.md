@@ -68,11 +68,11 @@ Listening sandbox proof:
 - draft text commits cleanly into replay
 - replay state, cue decisions, and thread state update through the same deterministic path after commit
 
-Fixture proof targets:
+Speech-first replay testing:
 
-- `thread-revisit-later`: unresolved thread carryover, reactivation, later payoff
-- `evasive-run-pressure`: evasive run suppression, accountability pressure, breakthrough answer
-- `saturation-plateau-repeat`: saturation growth, repetition quieting, plateau end-state
+- use listening sandbox for mic capture or nearby TV audio
+- type or paste real transcript into manual append when capture is weak
+- import JSON only for transcripts you actually want to inspect
 
 ## 6. What Is Not Ready Yet
 
