@@ -8,6 +8,7 @@ param(
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $launcherPath = Join-Path $repoRoot "cuedup-launcher.html"
+$appUrl = "http://localhost:3000/interview/mock-session/replay#listening-sandbox"
 
 function Invoke-Step {
   param(
@@ -50,9 +51,14 @@ if ($StartDev) {
       "Set-Location '$repoRoot'; npm run dev"
     )
   }
+
+  Invoke-Step "Opening CuedUp in your browser..." {
+    Start-Process $appUrl
+  }
 }
 
 Write-Host "Repo root: $repoRoot"
+Write-Host "App URL: $appUrl"
 if ($PrintOnly) {
   Write-Host "Print-only mode: no windows were opened."
 }

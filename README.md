@@ -25,6 +25,11 @@ Double-clickable wrapper:
 open-cuedup.cmd
 ```
 
+`open-cuedup.cmd` now acts as the one-click app launcher:
+- starts `npm run dev`
+- opens the replay app in your browser
+- does not open VS Code or the local launcher page
+
 Useful options:
 
 ```powershell
