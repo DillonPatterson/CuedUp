@@ -78,7 +78,6 @@ export function ReplayUpdatesPanel() {
               </span>
               <span className="font-mono text-xs text-stone-600">{file.path}</span>
             </div>
-            <p className="mt-2 text-xs text-stone-500">{file.statText}</p>
             <p className="mt-1 text-sm leading-5 text-stone-700">{file.impact}</p>
           </article>
         ))}
