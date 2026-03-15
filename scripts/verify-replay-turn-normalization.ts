@@ -104,6 +104,10 @@ assert.deepEqual(
     },
   ],
 );
+assert.deepEqual(
+  buildReplayTranscriptOrganization(result.turns, {}),
+  firstTurnOrganization,
+);
 
 const crossSourceText = "My brother made risk feel personal.";
 const crossSourceResult = appendReplayTranscriptTurns([], SESSION_ID, [
@@ -146,6 +150,31 @@ assert.deepEqual(manualOrganization.summary, {
   unresolvedThreadCues: [],
   tensions: [],
 });
+assert.deepEqual(manualOrganization.emergingThemes, []);
+assert.equal(manualOrganization.openThreads.length, 0);
+assert.deepEqual(
+  manualOrganization.notableClaims.map((item) => item.label),
+  [crossSourceText],
+);
+assert.equal(manualOrganization.tensionWatch.length, 0);
+assert.deepEqual(
+  manualOrganization.recallCandidates.map((candidate) => ({
+    label: candidate.label,
+    sourceKind: candidate.sourceKind,
+    recency: candidate.recency,
+    relevanceToCurrentTurn: candidate.relevanceToCurrentTurn,
+    readiness: candidate.readiness,
+  })),
+  [
+    {
+      label: crossSourceText,
+      sourceKind: "claim",
+      recency: "fresh",
+      relevanceToCurrentTurn: "high",
+      readiness: "urgent",
+    },
+  ],
+);
 assert.deepEqual(
   manualOrganization.annotations.map((annotation) => annotation.kind),
   ["entity", "theme", "theme", "theme", "claim"],

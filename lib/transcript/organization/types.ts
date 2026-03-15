@@ -24,6 +24,38 @@ export interface TranscriptDerivedAnnotation {
   spanRefs: TranscriptSpanRef[];
 }
 
+export interface TranscriptOrganizationBucketItem {
+  id: string;
+  label: string;
+  sourceKind: TranscriptDerivedAnnotationKind;
+  turnIds: string[];
+  occurrenceCount: number;
+  salience: TranscriptOrganizationSalience;
+  currentTurnLinked: boolean;
+  lastSeenTurnId: string | null;
+  lastSeenAt: string | null;
+}
+
+export type TranscriptRecallRecency = "fresh" | "recent" | "stale";
+export type TranscriptRecallRelevance = "low" | "medium" | "high";
+export type TranscriptRecallReadinessBand =
+  | "not_ready"
+  | "warming"
+  | "ready"
+  | "urgent";
+
+export interface TranscriptRecallCandidate {
+  id: string;
+  label: string;
+  sourceKind: Exclude<TranscriptDerivedAnnotationKind, "entity">;
+  turnIds: string[];
+  salience: TranscriptOrganizationSalience;
+  recency: TranscriptRecallRecency;
+  relevanceToCurrentTurn: TranscriptRecallRelevance;
+  readiness: TranscriptRecallReadinessBand;
+  reason: string;
+}
+
 export interface TranscriptRetrievalRecord {
   id: string;
   sessionId: string;
@@ -40,6 +72,11 @@ export interface TranscriptOrganizationSnapshot {
   annotations: TranscriptDerivedAnnotation[];
   annotationsByTurnId: Record<string, TranscriptDerivedAnnotation[]>;
   retrievalRecords: TranscriptRetrievalRecord[];
+  emergingThemes: TranscriptOrganizationBucketItem[];
+  openThreads: TranscriptOrganizationBucketItem[];
+  notableClaims: TranscriptOrganizationBucketItem[];
+  tensionWatch: TranscriptOrganizationBucketItem[];
+  recallCandidates: TranscriptRecallCandidate[];
   summary: {
     entities: string[];
     themes: string[];

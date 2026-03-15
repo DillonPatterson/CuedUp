@@ -1,10 +1,16 @@
 import type { TranscriptTurn } from "@/types";
-import type { ReplayCommittedTurnMetadata } from "@/lib/transcript/manual-turns";
+import type { ReplayTurnAnalysis } from "@/lib/transcript/turn-analysis";
+import type { ReplayTurnMemory } from "@/lib/transcript/turn-memory";
 import { buildWholeTurnSpanRef } from "@/lib/transcript/organization/span-ref";
 import type {
   TranscriptDerivedAnnotation,
   TranscriptDerivedAnnotationKind,
 } from "@/lib/transcript/organization/types";
+
+export type TranscriptOrganizationSourceMetadata = {
+  analysis: ReplayTurnAnalysis;
+  memory: ReplayTurnMemory;
+};
 
 type ReplayMemoryField =
   | "entities"
@@ -43,7 +49,7 @@ function buildAnnotationId(
 
 export function buildAnnotationsFromReplayMetadata(
   turn: TranscriptTurn,
-  metadata: ReplayCommittedTurnMetadata | undefined,
+  metadata: TranscriptOrganizationSourceMetadata | undefined,
 ): TranscriptDerivedAnnotation[] {
   if (!metadata) {
     return [];

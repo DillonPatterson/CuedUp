@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import type { DossierLiveHandoff, TranscriptTurn } from "@/types";
 import { NudgeRail } from "@/components/live/nudge-rail";
 import { PresenceDecisionLog } from "@/components/live/presence-decision-log";
+import { ConversationMemoryPanel } from "@/components/live/conversation-memory-panel";
 import { ReplayListeningSandbox } from "@/components/live/replay-listening-sandbox";
 import { ReplayProofSummary } from "@/components/live/replay-proof-summary";
 import { ReplayTranscriptInput } from "@/components/live/replay-transcript-input";
@@ -154,6 +155,36 @@ export function InterviewReplay({
   const [replayTurnMetadata, setReplayTurnMetadata] = useState<
     Record<string, ReplayCommittedTurnMetadata>
   >({});
+  const [currentSnapshotIndex, setCurrentSnapshotIndex] = useState(INITIAL_SNAPSHOT_INDEX);
+  const [isAutoplaying, setIsAutoplaying] = useState(false);
+  const [replaySource, setReplaySource] = useState<ReplaySourceState>(
+    buildSeededReplaySource,
+  );
+  const [proofSession, setProofSession] = useState(() =>
+    buildInitialProofSession(replayFixtures),
+  );
+  const [selectedCheckpointId, setSelectedCheckpointId] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
+  const visibleReplayTurns = useMemo(
+    () => replayLocalTurns.slice(0, currentSnapshotIndex),
+    [currentSnapshotIndex, replayLocalTurns],
+  );
+  const visibleReplayTurnMetadata = useMemo(
+    () =>
+      visibleReplayTurns.reduce<Record<string, ReplayCommittedTurnMetadata>>(
+        (result, turn) => {
+          const metadata = replayTurnMetadata[turn.id];
+
+          if (metadata) {
+            result[turn.id] = metadata;
+          }
+
+          return result;
+        },
+        {},
+      ),
+    [replayTurnMetadata, visibleReplayTurns],
+  );
   const timeline = useMemo(
     () =>
       buildInterviewSessionTimeline(
@@ -166,21 +197,11 @@ export function InterviewReplay({
   const transcriptOrganization = useMemo(
     () =>
       buildReplayTranscriptOrganization(
-        replayLocalTurns,
-        replayTurnMetadata,
+        visibleReplayTurns,
+        visibleReplayTurnMetadata,
       ),
-    [replayLocalTurns, replayTurnMetadata],
+    [visibleReplayTurnMetadata, visibleReplayTurns],
   );
-  const [currentSnapshotIndex, setCurrentSnapshotIndex] = useState(INITIAL_SNAPSHOT_INDEX);
-  const [isAutoplaying, setIsAutoplaying] = useState(false);
-  const [replaySource, setReplaySource] = useState<ReplaySourceState>(
-    buildSeededReplaySource,
-  );
-  const [proofSession, setProofSession] = useState(() =>
-    buildInitialProofSession(replayFixtures),
-  );
-  const [selectedCheckpointId, setSelectedCheckpointId] = useState<string | null>(null);
-  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const currentSnapshot = timeline.snapshots[currentSnapshotIndex];
   const currentTurnIndex = currentSnapshotIndex - 1;
   const recentDecisions = timeline.decisionLog
@@ -668,7 +689,6 @@ export function InterviewReplay({
             replaySourceLabel={replaySource.label}
             checkpointFocusLabel={checkpointFocusLabel}
             turnMetadata={replayTurnMetadata}
-            organization={transcriptOrganization}
             onNext={handleNext}
             onPrevious={handlePrevious}
             onReset={handleReset}
@@ -689,6 +709,16 @@ export function InterviewReplay({
 
         <div className="space-y-6">
           <ReplayUpdatesPanel />
+          <ConversationMemoryPanel
+            currentTurn={currentSnapshot.currentTurn}
+            currentTurnMetadata={
+              currentSnapshot.currentTurn
+                ? (replayTurnMetadata[currentSnapshot.currentTurn.id] ?? null)
+                : null
+            }
+            organization={transcriptOrganization}
+            surfaceLabel="Replay analyzer"
+          />
           <ReplayValidationGuide
             activeFixture={activeFixture}
             replaySourceLabel={replaySource.label}

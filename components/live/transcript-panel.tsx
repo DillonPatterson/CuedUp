@@ -1,9 +1,5 @@
 import type { TranscriptTurn } from "@/types";
 import type { ReplayCommittedTurnMetadata } from "@/lib/transcript/manual-turns";
-import type {
-  TranscriptDerivedAnnotation,
-  TranscriptOrganizationSnapshot,
-} from "@/lib/transcript/organization/types";
 
 type TranscriptPanelProps = {
   sessionId: string;
@@ -16,7 +12,6 @@ type TranscriptPanelProps = {
   replaySourceLabel: string;
   checkpointFocusLabel: string | null;
   turnMetadata: Record<string, ReplayCommittedTurnMetadata>;
-  organization: TranscriptOrganizationSnapshot;
   isAutoplaying: boolean;
   onNext: () => void;
   onPrevious: () => void;
@@ -36,35 +31,6 @@ function formatMemoryList(values: string[]) {
   return values.join(", ");
 }
 
-function formatAnnotationPreview(values: string[], limit = 2) {
-  return values
-    .slice(0, limit)
-    .map((value) => (value.length > 52 ? `${value.slice(0, 51)}...` : value))
-    .join(", ");
-}
-
-function sortAnnotations(
-  annotations: TranscriptDerivedAnnotation[],
-) {
-  const order: Record<TranscriptDerivedAnnotation["kind"], number> = {
-    entity: 0,
-    theme: 1,
-    claim: 2,
-    thread_cue: 3,
-    tension: 4,
-  };
-
-  return [...annotations].sort((left, right) => {
-    const kindDelta = order[left.kind] - order[right.kind];
-
-    if (kindDelta !== 0) {
-      return kindDelta;
-    }
-
-    return left.label.localeCompare(right.label);
-  });
-}
-
 export function TranscriptPanel({
   sessionId,
   guestName,
@@ -76,7 +42,6 @@ export function TranscriptPanel({
   replaySourceLabel,
   checkpointFocusLabel,
   turnMetadata,
-  organization,
   isAutoplaying,
   onNext,
   onPrevious,
@@ -87,10 +52,6 @@ export function TranscriptPanel({
   const currentTurnMetadata = currentTurn
     ? (turnMetadata[currentTurn.id] ?? null)
     : null;
-  const currentTurnAnnotations = currentTurn
-    ? sortAnnotations(organization.annotationsByTurnId[currentTurn.id] ?? [])
-    : [];
-  const sessionSummary = organization.summary;
 
   return (
     <section id="transcript-replay" className="panel min-h-80 p-6">
@@ -235,48 +196,6 @@ export function TranscriptPanel({
                     </p>
                   ) : null}
                 </div>
-                {currentTurnAnnotations.length > 0 ? (
-                  <div className="mt-3 rounded-2xl border border-stone-800 bg-stone-900/80 px-4 py-3 text-xs leading-6 text-stone-300">
-                    <p className="uppercase tracking-[0.16em] text-amber-300">
-                      Transcript organization
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {currentTurnAnnotations.map((annotation) => (
-                        <span
-                          key={annotation.id}
-                          className="rounded-full bg-stone-800 px-3 py-1 uppercase tracking-[0.14em]"
-                        >
-                          {formatLabel(annotation.kind)}: {annotation.label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                {sessionSummary.unresolvedThreadCues.length > 0 ||
-                sessionSummary.themes.length > 0 ||
-                sessionSummary.claims.length > 0 ? (
-                  <div className="mt-3 rounded-2xl border border-stone-800 bg-stone-900/80 px-4 py-3 text-xs leading-6 text-stone-300">
-                    <p className="uppercase tracking-[0.16em] text-amber-300">
-                      Session organization
-                    </p>
-                    {sessionSummary.unresolvedThreadCues.length > 0 ? (
-                      <p className="mt-2">
-                        Thread cues:{" "}
-                        {formatMemoryList(sessionSummary.unresolvedThreadCues)}
-                      </p>
-                    ) : null}
-                    {sessionSummary.themes.length > 0 ? (
-                      <p className="mt-1">
-                        Themes: {formatMemoryList(sessionSummary.themes)}
-                      </p>
-                    ) : null}
-                    {sessionSummary.claims.length > 0 ? (
-                      <p className="mt-1">
-                        Claims: {formatAnnotationPreview(sessionSummary.claims)}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
               </>
             ) : null}
           </>
