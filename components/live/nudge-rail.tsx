@@ -86,7 +86,7 @@ export function NudgeRail({
           Repetition guard
         </p>
         <p className="mt-2 text-lg font-semibold text-stone-900">
-          {staleNudgeGuard ? "Stale move suppressed" : "Fresh move available"}
+          {staleNudgeGuard ? "Top candidate repeated" : "Fresh top candidate"}
         </p>
       </div>
 
