@@ -1,5 +1,7 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
 @source not "../.codex-chrome";
+@source not "../.codex-dev-err.log";
+@source not "../.codex-dev-out.log";
 
 :root {
   --background: #f7f4ee;
