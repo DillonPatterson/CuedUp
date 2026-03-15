@@ -17,6 +17,10 @@ type ReplayUpdatesResponse = {
   uncommittedFiles: string[];
 };
 
+type ReplayUpdatesPanelProps = {
+  onClose?: () => void;
+};
+
 const KIND_STYLES: Record<ReplayUpdateFile["kind"], string> = {
   engine: "border-amber-300 bg-amber-50 text-amber-950",
   ui: "border-sky-300 bg-sky-50 text-sky-950",
@@ -24,7 +28,9 @@ const KIND_STYLES: Record<ReplayUpdateFile["kind"], string> = {
   other: "border-stone-300 bg-stone-100 text-stone-700",
 };
 
-export function ReplayUpdatesPanel() {
+export function ReplayUpdatesPanel({
+  onClose,
+}: ReplayUpdatesPanelProps) {
   const [data, setData] = useState<ReplayUpdatesResponse | null>(null);
 
   useEffect(() => {
@@ -53,12 +59,23 @@ export function ReplayUpdatesPanel() {
 
   return (
     <section className="panel p-5">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <p className="eyebrow">Updates</p>
-        <span className="font-mono text-xs text-stone-500">
-          {data.commitHash.slice(0, 7)}
-        </span>
-        <span className="text-xs text-stone-500">{data.relativeTime}</span>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <p className="eyebrow">Updates</p>
+          <span className="font-mono text-xs text-stone-500">
+            {data.commitHash.slice(0, 7)}
+          </span>
+          <span className="text-xs text-stone-500">{data.relativeTime}</span>
+        </div>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-stone-300 px-3 py-1 text-xs font-medium uppercase tracking-[0.14em] text-stone-700"
+          >
+            Close
+          </button>
+        ) : null}
       </div>
       <p className="mt-2 text-sm font-medium text-stone-900">
         {data.commitMessage}

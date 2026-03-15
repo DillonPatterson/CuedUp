@@ -1,7 +1,11 @@
-@import "tailwindcss" source("../");
-@source not "../.codex-chrome";
-@source not "../.codex-dev-err.log";
-@source not "../.codex-dev-out.log";
+@import "tailwindcss" source(none);
+@source "C:/Users/dillo/Desktop/CuedUp/app";
+@source "C:/Users/dillo/Desktop/CuedUp/components";
+@source "C:/Users/dillo/Desktop/CuedUp/lib";
+@source not "C:/Users/dillo/Desktop/CuedUp/.codex-chrome";
+@source not "C:/Users/dillo/Desktop/CuedUp/.codex-dev-err.log";
+@source not "C:/Users/dillo/Desktop/CuedUp/.codex-dev-out.log";
+@source not "C:/Users/dillo/Desktop/CuedUp/_stray-disabled";
 
 :root {
   --background: #f7f4ee;
