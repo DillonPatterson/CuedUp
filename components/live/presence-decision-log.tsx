@@ -2,6 +2,7 @@ import type { PresenceGuardDecision } from "@/types";
 
 type PresenceDecisionLogProps = {
   currentDecision: PresenceGuardDecision;
+  guardDecisions: PresenceGuardDecision[];
   recentDecisions: PresenceGuardDecision[];
 };
 
@@ -15,6 +16,7 @@ function formatReasons(decision: PresenceGuardDecision) {
 
 export function PresenceDecisionLog({
   currentDecision,
+  guardDecisions,
   recentDecisions,
 }: PresenceDecisionLogProps) {
   return (
@@ -37,7 +39,40 @@ export function PresenceDecisionLog({
         </p>
       </article>
 
-      <div className="mt-5 space-y-3">
+      <div className="mt-5">
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-stone-500">
+          Current turn evaluations
+        </p>
+        <div className="mt-3 space-y-3">
+          {guardDecisions.map((decision, index) => (
+            <article
+              key={`${decision.timestamp}:${decision.candidateId ?? "none"}:${index}`}
+              className={`rounded-2xl border p-4 ${
+                decision === currentDecision
+                  ? "border-amber-300 bg-amber-50/70"
+                  : "border-stone-200 bg-white/80"
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.14em] text-stone-500">
+                <span>{decision.outcome}</span>
+                <span>{decision.timestamp}</span>
+              </div>
+              <p className="mt-2 text-sm font-semibold text-stone-900">
+                {decision.formattedCue ?? decision.candidateLabel ?? "No cue"}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-stone-700">
+                {formatReasons(decision)}
+              </p>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-stone-500">
+          Recent prior decisions
+        </p>
+        <div className="mt-3 space-y-3">
         {recentDecisions.map((decision) => (
           <article
             key={`${decision.timestamp}:${decision.candidateId ?? "none"}`}
@@ -55,6 +90,7 @@ export function PresenceDecisionLog({
             </p>
           </article>
         ))}
+        </div>
       </div>
     </section>
   );

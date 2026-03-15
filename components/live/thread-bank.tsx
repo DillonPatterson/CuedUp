@@ -28,15 +28,24 @@ export function ThreadBank({
 
       <div className="mt-5 space-y-3">
         {unresolvedThreads.length > 0 ? (
-          unresolvedThreads.map((thread) => (
+          unresolvedThreads.map((thread, index) => (
             <article
               key={thread.id}
-              className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4"
+              className={`rounded-2xl border p-4 ${
+                index === 0
+                  ? "border-amber-300 bg-amber-50/70"
+                  : "border-stone-200 bg-stone-50/70"
+              }`}
             >
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-lg font-semibold text-stone-900">
                   {thread.label}
                 </h3>
+                {index === 0 ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-1 text-xs uppercase tracking-[0.14em] text-amber-800">
+                    Lead thread
+                  </span>
+                ) : null}
                 <span className="rounded-full bg-stone-100 px-2 py-1 text-xs uppercase tracking-[0.14em] text-stone-600">
                   {thread.source.replaceAll("_", " ")}
                 </span>

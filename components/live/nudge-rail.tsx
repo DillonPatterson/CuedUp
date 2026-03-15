@@ -1,10 +1,17 @@
-import type { CandidateNextMove, ConversationMode } from "@/types";
+import type {
+  CandidateNextMove,
+  ConversationMode,
+  PresenceGuardDecision,
+  SurfaceCue,
+} from "@/types";
 
 type NudgeRailProps = {
   sessionId: string;
   currentMode: ConversationMode;
   staleNudgeGuard: boolean;
   candidateNextMoves: CandidateNextMove[];
+  surfacedCue: SurfaceCue | null;
+  currentDecision: PresenceGuardDecision;
 };
 
 export function NudgeRail({
@@ -12,6 +19,8 @@ export function NudgeRail({
   currentMode,
   staleNudgeGuard,
   candidateNextMoves,
+  surfacedCue,
+  currentDecision,
 }: NudgeRailProps) {
   const primaryMove = candidateNextMoves[0] ?? null;
 
@@ -22,6 +31,24 @@ export function NudgeRail({
         Operator nudge rail
       </h2>
       <p className="mt-2 text-sm text-stone-600">Session {sessionId}</p>
+
+      <div className="mt-5 rounded-3xl border border-stone-200 bg-stone-950 px-5 py-5 text-stone-50">
+        <p className="text-xs uppercase tracking-[0.16em] text-amber-300">
+          Surfaced cue
+        </p>
+        <p className="mt-3 text-2xl font-semibold leading-9 text-stone-50">
+          {surfacedCue?.text ?? "No cue surfaced"}
+        </p>
+        <p className="mt-3 text-sm leading-6 text-stone-300">
+          {currentDecision.outcome === "surfaced"
+            ? "Presence Guard allowed one cue through on this snapshot."
+            : `Current decision: ${
+                currentDecision.reasons.length > 0
+                  ? currentDecision.reasons.join(", ").replaceAll("_", " ")
+                  : "no candidate"
+              }.`}
+        </p>
+      </div>
 
       <div className="mt-5 rounded-3xl border border-amber-300 bg-amber-50 p-5">
         <p className="text-xs uppercase tracking-[0.16em] text-amber-700">

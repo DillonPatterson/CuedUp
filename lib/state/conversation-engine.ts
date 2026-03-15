@@ -543,22 +543,6 @@ export function filterRepeatedNextMoves(
   };
 }
 
-export function applyStaleNudgeProtection(
-  state: ConversationState,
-  lastNudgeAt: string | null,
-): ConversationState {
-  return {
-    ...state,
-    staleNudgeGuard:
-      state.staleNudgeGuard ||
-      (Boolean(lastNudgeAt) &&
-        state.candidateNextMoves.length > 0 &&
-        state.recentNudgeKeys.includes(
-          buildStableMoveKey(state.candidateNextMoves[0]),
-        )),
-  };
-}
-
 export function processTranscriptTurn(
   state: ConversationState,
   turn: TranscriptTurn,
