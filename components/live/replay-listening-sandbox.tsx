@@ -1,16 +1,27 @@
 "use client";
 
-import { startTransition, useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useSearchParams } from "next/navigation";
 import type { TranscriptTurn } from "@/types";
 import type { ReplayTranscriptTurnDraft } from "@/lib/transcript/manual-turns";
 import {
   type BrowserSpeechRecognition,
   getBrowserSpeechRecognitionConstructor,
 } from "@/lib/listening/browser-speech";
+import { analyzeReplayCommittedTurn } from "@/lib/transcript/turn-analysis";
+import { extractReplayTurnMemory } from "@/lib/transcript/turn-memory";
 
 type ReplayListeningSandboxProps = {
   engineSessionId: string;
   replaySourceLabel: string;
+  lastCommittedTurn: TranscriptTurn | null;
   onCommitDrafts: (drafts: ReplayTranscriptTurnDraft[]) => void;
 };
 
@@ -200,11 +211,14 @@ function readStoredListeningDraft(
 export function ReplayListeningSandbox({
   engineSessionId,
   replaySourceLabel,
+  lastCommittedTurn,
   onCommitDrafts,
 }: ReplayListeningSandboxProps) {
+  const searchParams = useSearchParams();
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const committedTranscriptRef = useRef("");
   const hydratedDraftRef = useRef(false);
+  const startupRequestHandledRef = useRef<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [speaker, setSpeaker] = useState<TranscriptTurn["speaker"]>("guest");
   const [draftText, setDraftText] = useState("");
@@ -236,6 +250,44 @@ export function ReplayListeningSandbox({
   const uncommittedWordCount = normalizeTranscript(`${draftText} ${interimText}`)
     .split(/\s+/)
     .filter(Boolean).length;
+  const livePreview = useMemo(() => {
+    const previewText = normalizeTranscript(`${draftText} ${interimText}`);
+
+    if (!previewText) {
+      return null;
+    }
+
+    const previewScores = buildCommitScores(scoreMode, customScores);
+    const previewTurn: TranscriptTurn = {
+      id: "00000000-0000-4000-8000-000000000000",
+      sessionId: engineSessionId,
+      timestamp: new Date().toISOString(),
+      speaker,
+      text: previewText,
+      energyScore: previewScores.energyScore,
+      specificityScore: previewScores.specificityScore,
+      evasionScore: previewScores.evasionScore,
+      noveltyScore: previewScores.noveltyScore,
+      threadIdLink: null,
+    };
+    const analysis = analyzeReplayCommittedTurn(previewTurn, {
+      previousTurn: lastCommittedTurn,
+    });
+
+    return {
+      text: previewText,
+      analysis,
+      memory: extractReplayTurnMemory(previewTurn, analysis),
+    };
+  }, [
+    customScores,
+    draftText,
+    engineSessionId,
+    interimText,
+    lastCommittedTurn,
+    scoreMode,
+    speaker,
+  ]);
 
   useEffect(() => {
     committedTranscriptRef.current = draftText;
@@ -588,6 +640,47 @@ export function ReplayListeningSandbox({
     }
   }
 
+  const runNewInterviewStartup = useEffectEvent(
+    (shouldAutostartListening: boolean) => {
+      handleClearSession();
+      setStatusMessage(
+        shouldAutostartListening
+          ? "Opened a new interview workspace. Listening will start automatically if browser recognition is available here."
+          : "Opened a new interview workspace. The sandbox is cleared and ready for a fresh capture.",
+      );
+
+      if (shouldAutostartListening) {
+        window.setTimeout(() => {
+          handleStartListening();
+        }, 180);
+      }
+    },
+  );
+
+  useEffect(() => {
+    const isNewInterview = searchParams.get("newInterview") === "1";
+    const shouldAutostartListening =
+      searchParams.get("autostartListening") === "1";
+    const startupKey = `${engineSessionId}:${isNewInterview}:${shouldAutostartListening}`;
+
+    if (
+      (!isNewInterview && !shouldAutostartListening) ||
+      startupRequestHandledRef.current === startupKey
+    ) {
+      return;
+    }
+
+    startupRequestHandledRef.current = startupKey;
+    const nextUrl = `${window.location.pathname}${window.location.hash || "#listening-sandbox"}`;
+    window.history.replaceState({}, "", nextUrl);
+
+    const timerId = window.setTimeout(() => {
+      runNewInterviewStartup(shouldAutostartListening);
+    }, 0);
+
+    return () => window.clearTimeout(timerId);
+  }, [engineSessionId, searchParams]);
+
   function updateCustomScore(
     key: keyof ListeningScoreDraft,
     value: string,
@@ -682,6 +775,98 @@ export function ReplayListeningSandbox({
         <p className="mt-2 text-sm leading-6 text-stone-700">
           {statusMessage}
         </p>
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-stone-200 bg-white/85 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+              Live sorting preview
+            </p>
+            <p className="mt-1 text-sm leading-6 text-stone-700">
+              Updates while you speak or type. This preview is not committed into replay yet.
+            </p>
+          </div>
+          <span className="rounded-full bg-stone-100 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-stone-700">
+            {livePreview ? "Preview active" : "Waiting for input"}
+          </span>
+        </div>
+
+        {livePreview ? (
+          <>
+            <p className="mt-4 text-sm leading-6 text-stone-800">
+              {livePreview.text}
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-stone-600">
+              <span className="rounded-full bg-stone-100 px-3 py-1">
+                Emotion {livePreview.analysis.affective.dominantEmotion.replaceAll("_", " ")}
+              </span>
+              <span className="rounded-full bg-stone-100 px-3 py-1">
+                Affect {livePreview.analysis.affective.intensity}
+              </span>
+              <span className="rounded-full bg-stone-100 px-3 py-1">
+                Valence {livePreview.analysis.affective.valence}
+              </span>
+              <span className="rounded-full bg-stone-100 px-3 py-1">
+                Completion {livePreview.analysis.completion.completionStatus.replaceAll("_", " ")}
+              </span>
+              <span className="rounded-full bg-stone-100 px-3 py-1">
+                Thread {livePreview.analysis.threadAction.replaceAll("_", " ")}
+              </span>
+              <span className="rounded-full bg-stone-100 px-3 py-1">
+                Cue {livePreview.analysis.cuePotential}
+              </span>
+              <span className="rounded-full bg-stone-100 px-3 py-1">
+                Salience {livePreview.memory.salience}
+              </span>
+              {livePreview.analysis.interruption.interruptedPreviousTurn ? (
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-900">
+                  Interrupted previous turn
+                </span>
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
+                <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+                  Themes
+                </p>
+                <p className="mt-2 text-sm leading-6 text-stone-800">
+                  {livePreview.memory.themes.join(", ") || "None yet"}
+                </p>
+              </article>
+              <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
+                <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+                  Open threads
+                </p>
+                <p className="mt-2 text-sm leading-6 text-stone-800">
+                  {livePreview.memory.unresolvedThreadCues.join(", ") || "None yet"}
+                </p>
+              </article>
+              <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
+                <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+                  Claims
+                </p>
+                <p className="mt-2 text-sm leading-6 text-stone-800">
+                  {livePreview.memory.claims[0] ?? "None yet"}
+                </p>
+              </article>
+              <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
+                <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+                  Tension cues
+                </p>
+                <p className="mt-2 text-sm leading-6 text-stone-800">
+                  {livePreview.memory.contradictionSignals.join(", ") || "None yet"}
+                </p>
+              </article>
+            </div>
+          </>
+        ) : (
+          <p className="mt-4 text-sm leading-6 text-stone-600">
+            Start listening or type in the draft box to see themes, claims, open threads, and tension cues sort live before you commit anything.
+          </p>
+        )}
       </div>
 
       <div className="mt-5 flex flex-wrap gap-2">

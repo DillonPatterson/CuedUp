@@ -1,6 +1,7 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { DossierLiveHandoff, TranscriptTurn } from "@/types";
 import { NudgeRail } from "@/components/live/nudge-rail";
 import { PresenceDecisionLog } from "@/components/live/presence-decision-log";
@@ -105,6 +106,14 @@ function buildSeededReplaySource(): ReplaySourceState {
   };
 }
 
+function buildNewInterviewSource(): ReplaySourceState {
+  return {
+    label: "New interview workspace",
+    detail:
+      "Fresh replay-local workspace. Live sorting preview updates as the sandbox draft changes, and committed turns append into an empty transcript stream.",
+  };
+}
+
 export function InterviewReplay({
   displaySessionId,
   engineSessionId,
@@ -113,6 +122,8 @@ export function InterviewReplay({
   transcriptTurns,
 }: InterviewReplayProps) {
   void guestName;
+  const searchParams = useSearchParams();
+  const newInterviewRequestHandledRef = useRef<string | null>(null);
   // Replay owns an ephemeral local copy of turns so manual appends stay dev-only
   // and do not pretend to be canonical persisted session truth.
   const [replayLocalTurns, setReplayLocalTurns] = useState(transcriptTurns);
@@ -187,6 +198,39 @@ export function InterviewReplay({
       );
     });
   }, [engineSessionId]);
+
+  useEffect(() => {
+    const shouldStartNewInterview = searchParams.get("newInterview") === "1";
+    const startupKey = `${engineSessionId}:${shouldStartNewInterview}`;
+
+    if (
+      !shouldStartNewInterview ||
+      newInterviewRequestHandledRef.current === startupKey
+    ) {
+      return;
+    }
+
+    newInterviewRequestHandledRef.current = startupKey;
+
+    try {
+      window.localStorage.removeItem(replaySessionStorageKey(engineSessionId));
+    } catch {
+      // Browser-local replay persistence is best-effort only.
+    }
+
+    startTransition(() => {
+      setReplayLocalTurns([]);
+      setReplayTurnMetadata({});
+      setCurrentSnapshotIndex(INITIAL_SNAPSHOT_INDEX);
+      setIsAutoplaying(false);
+      setReplaySource(buildNewInterviewSource());
+      setRestoreNotice(null);
+      setIsUpdatesOpen(false);
+    });
+
+    const nextUrl = `${window.location.pathname}${window.location.hash || "#listening-sandbox"}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, [engineSessionId, searchParams]);
 
   useEffect(() => {
     try {
@@ -357,6 +401,16 @@ export function InterviewReplay({
     handleResetToSeededSession();
   }
 
+  function handleStartNewInterview() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.location.assign(
+      `/interview/${displaySessionId}/replay?newInterview=1&autostartListening=1#listening-sandbox`,
+    );
+  }
+
   void transcriptOrganization;
   void handleAppendTurn;
   void handleImportTranscript;
@@ -375,6 +429,13 @@ export function InterviewReplay({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleStartNewInterview}
+              className="rounded-full bg-amber-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-800"
+            >
+              New interview
+            </button>
             <button
               type="button"
               onClick={() => setIsUpdatesOpen((value) => !value)}
@@ -406,6 +467,7 @@ export function InterviewReplay({
       <ReplayListeningSandbox
         engineSessionId={engineSessionId}
         replaySourceLabel={replaySource.label}
+        lastCommittedTurn={replayLocalTurns.at(-1) ?? null}
         onCommitDrafts={(drafts) => handleAppendDrafts(drafts, "sandbox commit")}
       />
 
