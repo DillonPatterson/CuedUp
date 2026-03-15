@@ -11,6 +11,27 @@ npm install
 npm run dev
 ```
 
+## Open the project quickly
+
+From the repo root on Windows:
+
+```powershell
+.\open-cuedup.ps1
+```
+
+Double-clickable wrapper:
+
+```text
+open-cuedup.cmd
+```
+
+Useful options:
+
+```powershell
+.\open-cuedup.ps1 -StartDev
+.\open-cuedup.ps1 -PrintOnly
+```
+
 ## Notes
 
 - The interview page opens in sparse live mode by default.
