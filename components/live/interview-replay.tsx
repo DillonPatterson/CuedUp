@@ -41,6 +41,8 @@ type ReplaySourceState = {
   detail: string;
 };
 
+const EMPTY_REPLAY_GUEST_ID = "00000000-0000-4000-8000-000000000001";
+
 function isReplaySourceState(value: unknown): value is ReplaySourceState {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -70,6 +72,7 @@ function readStoredReplaySession(engineSessionId: string) {
       replaySource?: unknown;
       turnMetadata?: unknown;
       turnSources?: unknown;
+      isFreshInterview?: unknown;
     };
     const parsedTurns = transcriptTurnSchema.array().safeParse(parsed.turns);
 
@@ -87,6 +90,7 @@ function readStoredReplaySession(engineSessionId: string) {
       turns: parsedTurns.data,
       currentSnapshotIndex: storedSnapshotIndex,
       replaySource: parsed.replaySource,
+      isFreshInterview: parsed.isFreshInterview === true,
       turnMetadata: parseReplayCommittedTurnMetadataRecord(
         typeof parsed.turnMetadata !== "undefined"
           ? parsed.turnMetadata
@@ -114,6 +118,19 @@ function buildNewInterviewSource(): ReplaySourceState {
   };
 }
 
+function buildFreshReplayHandoff(): DossierLiveHandoff {
+  return {
+    guestId: EMPTY_REPLAY_GUEST_ID,
+    title: "Fresh interview workspace",
+    activeStoryVeins: [],
+    liveWires: [],
+    contradictionCandidates: [],
+    followUpOpportunities: [],
+    openingPaths: [],
+    audienceHooks: [],
+  };
+}
+
 export function InterviewReplay({
   displaySessionId,
   engineSessionId,
@@ -130,6 +147,7 @@ export function InterviewReplay({
   const [replayTurnMetadata, setReplayTurnMetadata] = useState<
     Record<string, ReplayCommittedTurnMetadata>
   >({});
+  const [isFreshInterview, setIsFreshInterview] = useState(false);
   const [currentSnapshotIndex, setCurrentSnapshotIndex] = useState(INITIAL_SNAPSHOT_INDEX);
   const [isAutoplaying, setIsAutoplaying] = useState(false);
   const [replaySource, setReplaySource] = useState<ReplaySourceState>(
@@ -137,6 +155,10 @@ export function InterviewReplay({
   );
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
+  const activeHandoff = useMemo(
+    () => (isFreshInterview ? buildFreshReplayHandoff() : handoff),
+    [handoff, isFreshInterview],
+  );
   const visibleReplayTurns = useMemo(
     () => replayLocalTurns.slice(0, currentSnapshotIndex),
     [currentSnapshotIndex, replayLocalTurns],
@@ -161,19 +183,19 @@ export function InterviewReplay({
     () =>
       buildInterviewSessionTimeline(
         engineSessionId,
-        handoff,
+        activeHandoff,
         replayLocalTurns,
       ),
-    [engineSessionId, handoff, replayLocalTurns],
+    [activeHandoff, engineSessionId, replayLocalTurns],
   );
   const transcriptOrganization = useMemo(
     () =>
       buildReplayTranscriptOrganization(
         visibleReplayTurns,
         visibleReplayTurnMetadata,
-        { handoff },
+        { handoff: activeHandoff },
       ),
-    [handoff, visibleReplayTurnMetadata, visibleReplayTurns],
+    [activeHandoff, visibleReplayTurnMetadata, visibleReplayTurns],
   );
   const currentSnapshot = timeline.snapshots[currentSnapshotIndex];
   const currentTurnIndex = currentSnapshotIndex - 1;
@@ -191,6 +213,7 @@ export function InterviewReplay({
     startTransition(() => {
       setReplayLocalTurns(storedReplaySession.turns);
       setReplayTurnMetadata(storedReplaySession.turnMetadata);
+      setIsFreshInterview(storedReplaySession.isFreshInterview);
       setCurrentSnapshotIndex(storedReplaySession.currentSnapshotIndex);
       setReplaySource(storedReplaySession.replaySource);
       setRestoreNotice(
@@ -221,6 +244,7 @@ export function InterviewReplay({
     startTransition(() => {
       setReplayLocalTurns([]);
       setReplayTurnMetadata({});
+      setIsFreshInterview(true);
       setCurrentSnapshotIndex(INITIAL_SNAPSHOT_INDEX);
       setIsAutoplaying(false);
       setReplaySource(buildNewInterviewSource());
@@ -239,6 +263,7 @@ export function InterviewReplay({
         JSON.stringify({
           turns: replayLocalTurns,
           turnMetadata: replayTurnMetadata,
+          isFreshInterview,
           currentSnapshotIndex,
           replaySource,
         }),
@@ -249,6 +274,7 @@ export function InterviewReplay({
   }, [
     currentSnapshotIndex,
     engineSessionId,
+    isFreshInterview,
     replayLocalTurns,
     replayTurnMetadata,
     replaySource,
@@ -384,6 +410,21 @@ export function InterviewReplay({
       buildSeededReplaySource(),
       {},
     );
+    startTransition(() => {
+      setIsFreshInterview(false);
+    });
+  }
+
+  function handleResetToFreshInterview() {
+    applyReplayLocalTurns(
+      [],
+      INITIAL_SNAPSHOT_INDEX,
+      buildNewInterviewSource(),
+      {},
+    );
+    startTransition(() => {
+      setIsFreshInterview(true);
+    });
   }
 
   function handleClearBrowserLocalReplayState() {
@@ -398,6 +439,11 @@ export function InterviewReplay({
         "Cleared browser-local replay state. Use Clear session inside the listening sandbox if you also want to wipe the sandbox draft.",
       );
     });
+    if (isFreshInterview) {
+      handleResetToFreshInterview();
+      return;
+    }
+
     handleResetToSeededSession();
   }
 
