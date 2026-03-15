@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CuedUp Dev Launcher</title>
+<style>
+  :root {
+    --bg: #0f0e0b;
+    --panel: #1a1712;
+    --panel-hi: #231f18;
+    --border: #332b1f;
+    --text: #eee7dc;
+    --text-dim: #b4aa9d;
+    --text-soft: #8f8579;
+    --amber: #d97706;
+    --amber-hi: #f59e0b;
+    --green: #16a34a;
+    --red: #dc2626;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at top, rgba(217, 119, 6, 0.08), transparent 35%), var(--bg);
+    color: var(--text);
+    font: 14px/1.55 "Segoe UI", sans-serif;
+  }
+
+  .shell {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 40px 20px 72px;
+  }
+
+  .eyebrow {
+    margin: 0 0 10px;
+    color: var(--amber-hi);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  h1, h2, h3, p {
+    margin: 0;
+  }
+
+  h1 {
+    font-size: clamp(32px, 6vw, 52px);
+    line-height: 1.05;
+  }
+
+  .subtitle {
+    margin-top: 14px;
+    max-width: 760px;
+    color: var(--text-dim);
+    font-size: 15px;
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 28px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--panel);
+  }
+
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--red);
+    flex: 0 0 auto;
+  }
+
+  .dot.live {
+    background: var(--green);
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+    animation: pulse 1.8s infinite;
+  }
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.35); }
+    70% { box-shadow: 0 0 0 10px rgba(22, 163, 74, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+  }
+
+  .status-text {
+    flex: 1;
+    color: var(--text-dim);
+  }
+
+  .status a {
+    color: var(--amber-hi);
+    text-decoration: none;
+  }
+
+  .section {
+    margin-top: 30px;
+    padding: 22px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--panel);
+  }
+
+  .section h2 {
+    font-size: 22px;
+    margin-bottom: 8px;
+  }
+
+  .section p {
+    color: var(--text-dim);
+  }
+
+  .grid {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+
+  .grid.routes {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+
+  .grid.steps {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .card {
+    display: block;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--panel-hi);
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+
+  .card:hover {
+    border-color: #4a3a25;
+    transform: translateY(-1px);
+  }
+
+  .route {
+    color: var(--amber-hi);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .card h3 {
+    margin-top: 10px;
+    font-size: 20px;
+  }
+
+  .card p {
+    margin-top: 10px;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  .tag {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(217, 119, 6, 0.12);
+    color: var(--amber-hi);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  ul {
+    margin: 14px 0 0;
+    padding-left: 20px;
+    color: var(--text-dim);
+  }
+
+  li + li {
+    margin-top: 8px;
+  }
+
+  .command {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel-hi);
+  }
+
+  code {
+    flex: 1;
+    color: var(--text);
+    font-family: Consolas, "Courier New", monospace;
+  }
+
+  button {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text);
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+
+  button:hover {
+    border-color: #4a3a25;
+  }
+
+  .callout {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: rgba(217, 119, 6, 0.09);
+    color: var(--text);
+  }
+
+  .small {
+    margin-top: 14px;
+    color: var(--text-soft);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <p class="eyebrow">Desktop canonical repo only</p>
+    <h1>CuedUp overnight launchpad</h1>
+    <p class="subtitle">
+      Current phase: structured replay proof plus listening sandbox. This is
+      for tomorrow's manual debug test, not production live mode.
+    </p>
+
+    <div class="status">
+      <span class="dot" id="statusDot"></span>
+      <span class="status-text" id="statusText">Checking localhost:3000...</span>
+      <a href="http://localhost:3000" target="_blank" rel="noreferrer">Open localhost</a>
+    </div>
+
+    <section class="section">
+      <h2>Tomorrow morning first</h2>
+      <p>
+        Start the dev server, open replay, use the listening sandbox, speak a
+        short segment, review the draft, commit it into replay, then inspect
+        the transcript/state panels driven by the same deterministic engine path.
+      </p>
+      <div class="grid steps">
+        <div class="card">
+          <div class="route">Step 1</div>
+          <h3>Start dev</h3>
+          <p>Run the local app before opening any route.</p>
+        </div>
+        <div class="card">
+          <div class="route">Step 2</div>
+          <h3>Open replay</h3>
+          <p>Use the replay route. The listening sandbox lives there, not on the sparse live page.</p>
+        </div>
+        <div class="card">
+          <div class="route">Step 3</div>
+          <h3>Commit draft</h3>
+          <p>Speech or typed draft stays uncommitted until you intentionally append it into replay.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Primary routes</h2>
+      <div class="grid routes">
+        <a class="card" href="http://localhost:3000/interview/mock-session/replay#listening-sandbox" target="_blank" rel="noreferrer">
+          <div class="route">/interview/mock-session/replay#listening-sandbox</div>
+          <h3>Listening sandbox first</h3>
+          <p>
+            Open the debug-only transcript harness directly. Start listening,
+            review captured segments and draft text, then commit intentionally
+            into replay.
+          </p>
+          <span class="tag">Tomorrow first click</span>
+        </a>
+
+        <a class="card" href="http://localhost:3000/interview/mock-session/replay" target="_blank" rel="noreferrer">
+          <div class="route">/interview/mock-session/replay</div>
+          <h3>Replay validation cockpit</h3>
+          <p>
+            Fixture loader, manual append, JSON import, proof tracking, decision
+            log, thread bank, and the debug-only listening sandbox.
+          </p>
+          <span class="tag">Use this first</span>
+        </a>
+
+        <a class="card" href="http://localhost:3000/interview/mock-session" target="_blank" rel="noreferrer">
+          <div class="route">/interview/mock-session</div>
+          <h3>Sparse live surface</h3>
+          <p>
+            Intentionally quiet and mostly empty. Do not use this for tomorrow's
+            transcript capture test.
+          </p>
+          <span class="tag">Do not debug here</span>
+        </a>
+      </div>
+      <div class="callout">
+        The replay route is the real test surface right now. Live mode stays sparse on purpose. The listening sandbox lives inside replay, not on the live page.
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Fixture proof targets</h2>
+      <ul>
+        <li><strong>thread-revisit-later</strong>: unresolved thread carryover, reactivation, later payoff</li>
+        <li><strong>evasive-run-pressure</strong>: suppression under evasive answers, then state shift on breakthrough</li>
+        <li><strong>saturation-plateau-repeat</strong>: saturation growth, repetition quieting, plateau end-state</li>
+      </ul>
+      <p class="small">
+        Load fixtures from inside the replay route. Fixture loads replace the replay-local turn stream and jump to the loaded end-state. Use the proof guide and proof summary panels there, not separate notes.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>Tomorrow's exact flow</h2>
+      <ul>
+        <li>Click <strong>Listening sandbox first</strong>.</li>
+        <li>Try <strong>Start listening</strong>. If browser recognition is weak, type or paste into the draft instead.</li>
+        <li>Review the captured segments and the editable draft.</li>
+        <li>Commit into replay as one turn or one turn per segment.</li>
+        <li>Inspect transcript replay, nudge rail, thread bank, and cue decisions.</li>
+        <li>Then load fixtures and finish the proof checklist.</li>
+      </ul>
+      <p class="small">
+        Browser-local restore is now part of the workflow. Use <strong>Clear session</strong> in the sandbox or <strong>Wipe replay/proof restore state</strong> in replay if old local state is confusing you.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>Terminal commands</h2>
+      <div class="command">
+        <code>npm run dev</code>
+        <button type="button" onclick="copyCommand(this, 'npm run dev')">Copy</button>
+      </div>
+      <div class="command">
+        <code>npm run lint</code>
+        <button type="button" onclick="copyCommand(this, 'npm run lint')">Copy</button>
+      </div>
+      <div class="command">
+        <code>npx tsc --noEmit</code>
+        <button type="button" onclick="copyCommand(this, 'npx tsc --noEmit')">Copy</button>
+      </div>
+      <div class="command">
+        <code>npm run build</code>
+        <button type="button" onclick="copyCommand(this, 'npm run build')">Copy</button>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Reality check</h2>
+      <ul>
+        <li>This is not production live mode.</li>
+        <li>This is not earpiece logic.</li>
+        <li>This is not real streaming ingestion yet.</li>
+        <li>If browser speech recognition is weak or unsupported, use the typed draft and segment fallback in the listening sandbox.</li>
+      </ul>
+    </section>
+  </div>
+
+  <script>
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+
+    async function checkServer() {
+      try {
+        await fetch("http://localhost:3000", { mode: "no-cors", cache: "no-store" });
+        statusDot.classList.add("live");
+        statusText.textContent = "Dev server detected at localhost:3000";
+      } catch {
+        statusDot.classList.remove("live");
+        statusText.textContent = "Dev server not detected. Run npm run dev first.";
+      }
+    }
+
+    async function copyCommand(button, value) {
+      const originalText = button.textContent;
+
+      try {
+        await navigator.clipboard.writeText(value);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+
+      window.setTimeout(() => {
+        button.textContent = originalText;
+      }, 1200);
+    }
+
+    checkServer();
+    window.setInterval(checkServer, 8000);
+  </script>
+</body>
+</html>

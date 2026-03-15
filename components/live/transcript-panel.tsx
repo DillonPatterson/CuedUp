@@ -40,7 +40,7 @@ export function TranscriptPanel({
   const isSeedSnapshot = currentSnapshotIndex === 0;
 
   return (
-    <section className="panel min-h-80 p-6">
+    <section id="transcript-replay" className="panel min-h-80 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="eyebrow">Transcript replay</p>
@@ -107,7 +107,9 @@ export function TranscriptPanel({
 
       <div className="mt-6 rounded-3xl border border-stone-200 bg-stone-950 px-5 py-6 text-stone-50">
         <p className="text-xs uppercase tracking-[0.16em] text-amber-300">
-          {isSeedSnapshot ? "Current turn" : `Current turn | ${currentTurnIndex + 1}`}
+          {isSeedSnapshot
+            ? "Current turn"
+            : `Current turn | ${currentTurnIndex + 1}`}
         </p>
         {currentTurn ? (
           <>
@@ -116,6 +118,7 @@ export function TranscriptPanel({
                 {speakerLabel(currentTurn.speaker)}
               </span>
               <span>{currentTurn.timestamp}</span>
+              <span>Source {replaySourceLabel}</span>
               <span>Energy {currentTurn.energyScore.toFixed(2)}</span>
               <span>Specificity {currentTurn.specificityScore.toFixed(2)}</span>
             </div>

@@ -4,12 +4,10 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import type { DossierLiveHandoff, TranscriptTurn } from "@/types";
 import { NudgeRail } from "@/components/live/nudge-rail";
 import { PresenceDecisionLog } from "@/components/live/presence-decision-log";
+import { ReplayListeningSandbox } from "@/components/live/replay-listening-sandbox";
+import { ReplayProofSummary } from "@/components/live/replay-proof-summary";
 import { ReplayTranscriptInput } from "@/components/live/replay-transcript-input";
-import {
-  type ReplayCheckpointStatus,
-  ReplayValidationGuide,
-  type ReplayFixtureAssessment,
-} from "@/components/live/replay-validation-guide";
+import { ReplayValidationGuide } from "@/components/live/replay-validation-guide";
 import { ThreadBank } from "@/components/live/thread-bank";
 import { TopicMap } from "@/components/live/topic-map";
 import { TranscriptPanel } from "@/components/live/transcript-panel";
@@ -18,12 +16,26 @@ import {
   replayFixtures,
   type ReplayFixtureDefinition,
 } from "@/lib/mock/replay-fixtures";
+import { transcriptTurnSchema } from "@/lib/schemas/transcript";
 import { buildInterviewSessionTimeline } from "@/lib/state/interview-session-timeline";
 import {
   appendManualTranscriptTurn,
   importReplayTranscriptTurnDrafts,
   importReplayTranscriptTurns,
 } from "@/lib/transcript/manual-turns";
+import {
+  buildInitialProofSession,
+  buildProofCompactSummary,
+  buildProofJsonSummary,
+  buildProofMarkdownSummary,
+  hydrateProofSession,
+  setActiveProofFixture,
+  summarizeProofSession,
+  updateCheckpointReview,
+  updateFixtureAssessment,
+  type ReplayCheckpointStatus,
+  type ReplayFixtureAssessment,
+} from "@/lib/replay/proof-session";
 
 type InterviewReplayProps = {
   displaySessionId: string;
@@ -35,6 +47,12 @@ type InterviewReplayProps = {
 
 const INITIAL_SNAPSHOT_INDEX = 0;
 const AUTOPLAY_INTERVAL_MS = 1800;
+const proofSessionStorageKey = (engineSessionId: string) =>
+  `cuedup:replay-proof-session:${engineSessionId}`;
+const replaySessionStorageKey = (engineSessionId: string) =>
+  `cuedup:replay-session:${engineSessionId}`;
+
+type ReplayAppendSource = "manual turn" | "JSON import" | "sandbox commit";
 
 type ReplaySourceState = {
   label: string;
@@ -42,6 +60,64 @@ type ReplaySourceState = {
   activeFixtureId: string | null;
   isFixtureRunModified: boolean;
 };
+
+function isReplaySourceState(value: unknown): value is ReplaySourceState {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Partial<ReplaySourceState>;
+
+  return (
+    typeof candidate.label === "string" &&
+    typeof candidate.detail === "string" &&
+    (typeof candidate.activeFixtureId === "string" ||
+      candidate.activeFixtureId === null) &&
+    typeof candidate.isFixtureRunModified === "boolean"
+  );
+}
+
+function readStoredReplaySession(engineSessionId: string) {
+  try {
+    const rawValue = window.localStorage.getItem(
+      replaySessionStorageKey(engineSessionId),
+    );
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as {
+      turns?: unknown;
+      currentSnapshotIndex?: unknown;
+      replaySource?: unknown;
+      selectedCheckpointId?: unknown;
+    };
+    const parsedTurns = transcriptTurnSchema.array().safeParse(parsed.turns);
+
+    if (!parsedTurns.success || !isReplaySourceState(parsed.replaySource)) {
+      return null;
+    }
+
+    const maxSnapshotIndex = parsedTurns.data.length;
+    const storedSnapshotIndex =
+      typeof parsed.currentSnapshotIndex === "number"
+        ? Math.min(Math.max(parsed.currentSnapshotIndex, 0), maxSnapshotIndex)
+        : INITIAL_SNAPSHOT_INDEX;
+
+    return {
+      turns: parsedTurns.data,
+      currentSnapshotIndex: storedSnapshotIndex,
+      replaySource: parsed.replaySource,
+      selectedCheckpointId:
+        typeof parsed.selectedCheckpointId === "string"
+          ? parsed.selectedCheckpointId
+          : null,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function buildSeededReplaySource(): ReplaySourceState {
   return {
@@ -77,13 +153,11 @@ export function InterviewReplay({
   const [replaySource, setReplaySource] = useState<ReplaySourceState>(
     buildSeededReplaySource,
   );
-  const [fixtureAssessments, setFixtureAssessments] = useState<
-    Record<string, ReplayFixtureAssessment>
-  >({});
+  const [proofSession, setProofSession] = useState(() =>
+    buildInitialProofSession(replayFixtures),
+  );
   const [selectedCheckpointId, setSelectedCheckpointId] = useState<string | null>(null);
-  const [fixtureCheckpointStatuses, setFixtureCheckpointStatuses] = useState<
-    Record<string, Record<string, ReplayCheckpointStatus>>
-  >({});
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const currentSnapshot = timeline.snapshots[currentSnapshotIndex];
   const currentTurnIndex = currentSnapshotIndex - 1;
   const recentDecisions = timeline.decisionLog
@@ -94,11 +168,28 @@ export function InterviewReplay({
     : null;
   const leadThread = currentSnapshot.unresolvedThreads[0] ?? null;
   const topMove = currentSnapshot.topMoves[0] ?? null;
-  const currentAssessment = activeFixture
-    ? (fixtureAssessments[activeFixture.id] ?? "pending")
+  const proofSummary = useMemo(
+    () => summarizeProofSession(replayFixtures, proofSession),
+    [proofSession],
+  );
+  const markdownProofSummary = useMemo(
+    () => buildProofMarkdownSummary(replayFixtures, proofSession),
+    [proofSession],
+  );
+  const compactProofSummary = useMemo(
+    () => buildProofCompactSummary(replayFixtures, proofSession),
+    [proofSession],
+  );
+  const jsonProofSummary = useMemo(
+    () => buildProofJsonSummary(replayFixtures, proofSession),
+    [proofSession],
+  );
+  const activeFixtureSummary = activeFixture
+    ? proofSummary.fixtures.find((fixture) => fixture.fixtureId === activeFixture.id) ?? null
     : null;
-  const checkpointStatuses = activeFixture
-    ? (fixtureCheckpointStatuses[activeFixture.id] ?? {})
+  const currentAssessment = activeFixtureSummary?.assessment ?? null;
+  const checkpointReviews = activeFixture
+    ? (proofSession.fixtures[activeFixture.id]?.checkpointReviews ?? {})
     : {};
   const currentCheckpoint =
     activeFixture?.checkpoints.find(
@@ -112,6 +203,91 @@ export function InterviewReplay({
     ) ?? null;
   const checkpointFocusLabel =
     currentCheckpoint?.label ?? selectedCheckpoint?.label ?? null;
+  const nextPendingCheckpoint =
+    activeFixture?.checkpoints.find(
+      (checkpoint) =>
+        (checkpointReviews[checkpoint.id]?.status ?? "pending") === "pending",
+    ) ?? null;
+
+  useEffect(() => {
+    const storedReplaySession = readStoredReplaySession(engineSessionId);
+
+    if (!storedReplaySession) {
+      return;
+    }
+
+    startTransition(() => {
+      setReplayLocalTurns(storedReplaySession.turns);
+      setCurrentSnapshotIndex(storedReplaySession.currentSnapshotIndex);
+      setReplaySource(storedReplaySession.replaySource);
+      setSelectedCheckpointId(storedReplaySession.selectedCheckpointId);
+      setRestoreNotice(
+        "Restored browser-local replay session. Review source, checkpoint focus, and snapshot position before continuing.",
+      );
+      setProofSession((currentSession) =>
+        setActiveProofFixture(
+          currentSession,
+          storedReplaySession.replaySource.activeFixtureId,
+        ),
+      );
+    });
+  }, [engineSessionId]);
+
+  useEffect(() => {
+    try {
+      const storedProofSession = window.localStorage.getItem(
+        proofSessionStorageKey(engineSessionId),
+      );
+
+      if (!storedProofSession) {
+        return;
+      }
+
+      startTransition(() => {
+        setProofSession(hydrateProofSession(replayFixtures, storedProofSession));
+        setRestoreNotice((currentNotice) =>
+          currentNotice
+            ? `${currentNotice} Proof session state was restored too.`
+            : "Restored browser-local proof session state.",
+        );
+      });
+    } catch {
+      // Browser-local proof persistence is best-effort only.
+    }
+  }, [engineSessionId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        replaySessionStorageKey(engineSessionId),
+        JSON.stringify({
+          turns: replayLocalTurns,
+          currentSnapshotIndex,
+          replaySource,
+          selectedCheckpointId,
+        }),
+      );
+    } catch {
+      // Browser-local replay persistence is best-effort only.
+    }
+  }, [
+    currentSnapshotIndex,
+    engineSessionId,
+    replayLocalTurns,
+    replaySource,
+    selectedCheckpointId,
+  ]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        proofSessionStorageKey(engineSessionId),
+        JSON.stringify(proofSession),
+      );
+    } catch {
+      // Browser-local proof persistence is best-effort only.
+    }
+  }, [engineSessionId, proofSession]);
 
   function buildFixtureReplaySource(fixture: ReplayFixtureDefinition): ReplaySourceState {
     return {
@@ -123,7 +299,7 @@ export function InterviewReplay({
     };
   }
 
-  function buildReplaySourceAfterAppend(kind: "manual turn" | "JSON import") {
+  function buildReplaySourceAfterAppend(kind: ReplayAppendSource) {
     if (activeFixture) {
       return {
         label: `Fixture: ${activeFixture.label} (modified)`,
@@ -156,6 +332,12 @@ export function InterviewReplay({
       setIsAutoplaying(false);
       if (nextReplaySource) {
         setReplaySource(nextReplaySource);
+        setProofSession((currentSession) =>
+          setActiveProofFixture(
+            currentSession,
+            nextReplaySource.activeFixtureId,
+          ),
+        );
       }
       if (typeof nextSelectedCheckpointId !== "undefined") {
         setSelectedCheckpointId(nextSelectedCheckpointId);
@@ -215,21 +397,23 @@ export function InterviewReplay({
   function handleAppendTurn(
     draft: Parameters<typeof appendManualTranscriptTurn>[2],
   ) {
-    const nextTurns = appendManualTranscriptTurn(
+    handleAppendDrafts([draft], "manual turn");
+  }
+
+  function handleAppendDrafts(
+    drafts: Parameters<typeof appendManualTranscriptTurn>[2][],
+    source: ReplayAppendSource,
+  ) {
+    const nextTurns = drafts.reduce(
+      (currentTurns, draft) =>
+        appendManualTranscriptTurn(currentTurns, engineSessionId, draft),
       replayLocalTurns,
-      engineSessionId,
-      draft,
     );
 
-    // `snapshots[0]` is the seeded pre-turn snapshot and `snapshots[i]`
-    // corresponds to `turns[i - 1]`, so `nextTurns.length` lands on the
-    // snapshot produced by the just-appended turn.
-    // The timeline builder emits one initial seeded snapshot plus one snapshot
-    // per turn, so the latest turn always lives at snapshot index `turns.length`.
     applyReplayLocalTurns(
       nextTurns,
       nextTurns.length,
-      buildReplaySourceAfterAppend("manual turn"),
+      buildReplaySourceAfterAppend(source),
     );
   }
 
@@ -287,10 +471,9 @@ export function InterviewReplay({
       return;
     }
 
-    setFixtureAssessments((currentAssessments) => ({
-      ...currentAssessments,
-      [activeFixture.id]: assessment,
-    }));
+    setProofSession((currentSession) =>
+      updateFixtureAssessment(currentSession, activeFixture.id, assessment),
+    );
   }
 
   function handleCheckpointStatusChange(
@@ -301,14 +484,24 @@ export function InterviewReplay({
       return;
     }
 
-    setFixtureCheckpointStatuses((currentStatuses) => ({
-      ...currentStatuses,
-      [activeFixture.id]: {
-        ...(currentStatuses[activeFixture.id] ?? {}),
-        [checkpointId]: status,
-      },
-    }));
+    setProofSession((currentSession) =>
+      updateCheckpointReview(currentSession, activeFixture.id, checkpointId, {
+        status,
+      }),
+    );
     setSelectedCheckpointId(checkpointId);
+  }
+
+  function handleCheckpointNoteChange(checkpointId: string, note: string) {
+    if (!activeFixture) {
+      return;
+    }
+
+    setProofSession((currentSession) =>
+      updateCheckpointReview(currentSession, activeFixture.id, checkpointId, {
+        note,
+      }),
+    );
   }
 
   function handleCheckpointJump(checkpointId: string) {
@@ -331,77 +524,184 @@ export function InterviewReplay({
     });
   }
 
+  function handleClearBrowserLocalReplayState() {
+    try {
+      window.localStorage.removeItem(replaySessionStorageKey(engineSessionId));
+      window.localStorage.removeItem(proofSessionStorageKey(engineSessionId));
+    } catch {
+      // Browser-local replay persistence is best-effort only.
+    }
+
+    startTransition(() => {
+      setProofSession(buildInitialProofSession(replayFixtures));
+      setRestoreNotice(
+        "Cleared browser-local replay and proof state. Use Clear session inside the listening sandbox if you also want to wipe the sandbox draft.",
+      );
+    });
+    handleResetToSeededSession();
+  }
+
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.6fr_0.95fr]">
-      <ReplayValidationGuide
-        activeFixture={activeFixture}
-        replaySourceLabel={replaySource.label}
-        replaySourceDetail={replaySource.detail}
-        currentSnapshotIndex={currentSnapshotIndex}
-        totalTurns={replayLocalTurns.length}
-        surfacedCue={currentSnapshot.surfaceCue}
-        topMove={topMove}
-        leadThread={leadThread}
-        currentDecision={currentSnapshot.decisionLogEntry}
-        assessment={currentAssessment}
-        onAssessmentChange={handleAssessmentChange}
-        isFixtureRunModified={replaySource.isFixtureRunModified}
-        checkpointStatuses={checkpointStatuses}
-        selectedCheckpointId={selectedCheckpointId}
-        onCheckpointStatusChange={handleCheckpointStatusChange}
-        onCheckpointJump={handleCheckpointJump}
-      />
-      <TranscriptPanel
-        sessionId={displaySessionId}
-        guestName={guestName}
-        recentTurns={currentSnapshot.recentTurns}
-        currentTurn={currentSnapshot.currentTurn}
-        currentTurnIndex={currentTurnIndex}
-        currentSnapshotIndex={currentSnapshotIndex}
-        totalTurns={replayLocalTurns.length}
-        replaySourceLabel={replaySource.label}
-        checkpointFocusLabel={checkpointFocusLabel}
-        onNext={handleNext}
-        onPrevious={handlePrevious}
-        onReset={handleReset}
-        onAutoplayToggle={handleAutoplayToggle}
-        isAutoplaying={isAutoplaying}
-      />
-      <NudgeRail
-        sessionId={displaySessionId}
-        currentMode={currentSnapshot.conversationState.currentMode}
-        staleNudgeGuard={currentSnapshot.conversationState.staleNudgeGuard}
-        candidateNextMoves={currentSnapshot.topMoves}
-        surfacedCue={currentSnapshot.surfaceCue}
-        currentDecision={currentSnapshot.decisionLogEntry}
-      />
-      <ThreadBank
-        sessionId={displaySessionId}
-        unresolvedThreads={currentSnapshot.unresolvedThreads}
-        turnCount={currentSnapshot.conversationState.turnCount}
-      />
-      <TopicMap
-        sessionId={displaySessionId}
-        coveredVeins={currentSnapshot.conversationState.coveredVeins}
-        storyVeinProgress={currentSnapshot.storyVeinProgress}
-        emotionalHeat={currentSnapshot.conversationState.emotionalHeat}
-        closureConfidence={currentSnapshot.conversationState.closureConfidence}
-      />
-      <PresenceDecisionLog
-        currentDecision={currentSnapshot.decisionLogEntry}
-        guardDecisions={currentSnapshot.guardDecisions}
-        recentDecisions={recentDecisions}
-      />
-      <ReplayTranscriptInput
-        fixtures={replayFixtures}
-        activeFixtureId={activeFixture?.id ?? null}
-        replaySourceLabel={replaySource.label}
-        replaySourceDetail={replaySource.detail}
-        onAppend={handleAppendTurn}
-        onImport={handleImportTranscript}
-        onLoadFixture={handleLoadFixture}
-        onResetToSeededSession={handleResetToSeededSession}
-      />
+    <div className="space-y-6">
+      <section className="panel p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-4xl">
+            <p className="eyebrow">Replay cockpit</p>
+            <h2 className="mt-2 text-3xl font-semibold text-stone-900">
+              Debug transcript and proof workflow
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-stone-700">
+              One replay-local turn stream feeds the deterministic timeline,
+              engine, and Presence Guard. Fixtures, JSON import, manual append,
+              and sandbox transcript commits all converge here.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearBrowserLocalReplayState}
+            className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+          >
+            Wipe replay/proof restore state
+          </button>
+        </div>
+
+        {restoreNotice ? (
+          <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+            {restoreNotice}
+          </div>
+        ) : null}
+
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+              Replay source
+            </p>
+            <p className="mt-2 text-lg font-semibold text-stone-900">
+              {replaySource.label}
+            </p>
+          </article>
+          <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+              Active fixture
+            </p>
+            <p className="mt-2 text-lg font-semibold text-stone-900">
+              {activeFixture?.label ?? "none"}
+            </p>
+          </article>
+          <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+              Checkpoint focus
+            </p>
+            <p className="mt-2 text-lg font-semibold text-stone-900">
+              {checkpointFocusLabel ?? "none"}
+            </p>
+          </article>
+          <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+              Next pending checkpoint
+            </p>
+            <p className="mt-2 text-lg font-semibold text-stone-900">
+              {nextPendingCheckpoint?.label ?? "none"}
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-6">
+          <ReplayListeningSandbox
+            engineSessionId={engineSessionId}
+            replaySourceLabel={replaySource.label}
+            onCommitDrafts={(drafts) => handleAppendDrafts(drafts, "sandbox commit")}
+          />
+          <TranscriptPanel
+            sessionId={displaySessionId}
+            guestName={guestName}
+            recentTurns={currentSnapshot.recentTurns}
+            currentTurn={currentSnapshot.currentTurn}
+            currentTurnIndex={currentTurnIndex}
+            currentSnapshotIndex={currentSnapshotIndex}
+            totalTurns={replayLocalTurns.length}
+            replaySourceLabel={replaySource.label}
+            checkpointFocusLabel={checkpointFocusLabel}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            onReset={handleReset}
+            onAutoplayToggle={handleAutoplayToggle}
+            isAutoplaying={isAutoplaying}
+          />
+          <ReplayTranscriptInput
+            fixtures={replayFixtures}
+            activeFixtureId={activeFixture?.id ?? null}
+            replaySourceLabel={replaySource.label}
+            replaySourceDetail={replaySource.detail}
+            onAppend={handleAppendTurn}
+            onImport={handleImportTranscript}
+            onLoadFixture={handleLoadFixture}
+            onResetToSeededSession={handleResetToSeededSession}
+          />
+        </div>
+
+        <div className="space-y-6">
+          <ReplayValidationGuide
+            activeFixture={activeFixture}
+            replaySourceLabel={replaySource.label}
+            replaySourceDetail={replaySource.detail}
+            currentSnapshotIndex={currentSnapshotIndex}
+            totalTurns={replayLocalTurns.length}
+            surfacedCue={currentSnapshot.surfaceCue}
+            topMove={topMove}
+            leadThread={leadThread}
+            currentDecision={currentSnapshot.decisionLogEntry}
+            assessment={currentAssessment}
+            onAssessmentChange={handleAssessmentChange}
+            isFixtureRunModified={replaySource.isFixtureRunModified}
+            fixtureReviewStatus={activeFixtureSummary?.reviewStatus ?? null}
+            checkpointReviews={checkpointReviews}
+            selectedCheckpointId={selectedCheckpointId}
+            onCheckpointStatusChange={handleCheckpointStatusChange}
+            onCheckpointNoteChange={handleCheckpointNoteChange}
+            onCheckpointJump={handleCheckpointJump}
+          />
+          <ReplayProofSummary
+            summary={proofSummary}
+            compactSummary={compactProofSummary}
+            markdownSummary={markdownProofSummary}
+            jsonSummary={jsonProofSummary}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <NudgeRail
+          sessionId={displaySessionId}
+          currentMode={currentSnapshot.conversationState.currentMode}
+          staleNudgeGuard={currentSnapshot.conversationState.staleNudgeGuard}
+          candidateNextMoves={currentSnapshot.topMoves}
+          surfacedCue={currentSnapshot.surfaceCue}
+          currentDecision={currentSnapshot.decisionLogEntry}
+        />
+        <ThreadBank
+          sessionId={displaySessionId}
+          unresolvedThreads={currentSnapshot.unresolvedThreads}
+          turnCount={currentSnapshot.conversationState.turnCount}
+        />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <PresenceDecisionLog
+          currentDecision={currentSnapshot.decisionLogEntry}
+          guardDecisions={currentSnapshot.guardDecisions}
+          recentDecisions={recentDecisions}
+        />
+        <TopicMap
+          sessionId={displaySessionId}
+          coveredVeins={currentSnapshot.conversationState.coveredVeins}
+          storyVeinProgress={currentSnapshot.storyVeinProgress}
+          emotionalHeat={currentSnapshot.conversationState.emotionalHeat}
+          closureConfidence={currentSnapshot.conversationState.closureConfidence}
+        />
+      </div>
     </div>
   );
 }

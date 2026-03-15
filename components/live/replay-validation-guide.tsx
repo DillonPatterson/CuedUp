@@ -10,13 +10,12 @@ import type {
   ReplayFixtureCheckpoint,
   ReplayFixtureDefinition,
 } from "@/lib/mock/replay-fixtures";
-
-export type ReplayFixtureAssessment =
-  | "pending"
-  | "appears_to_pass"
-  | "appears_to_fail";
-
-export type ReplayCheckpointStatus = "pending" | "observed" | "failed";
+import type {
+  FixtureReviewStatus,
+  ReplayCheckpointReview,
+  ReplayCheckpointStatus,
+  ReplayFixtureAssessment,
+} from "@/lib/replay/proof-session";
 
 type ReplayValidationGuideProps = {
   activeFixture: ReplayFixtureDefinition | null;
@@ -31,12 +30,14 @@ type ReplayValidationGuideProps = {
   assessment: ReplayFixtureAssessment | null;
   onAssessmentChange: (assessment: ReplayFixtureAssessment) => void;
   isFixtureRunModified: boolean;
-  checkpointStatuses: Record<string, ReplayCheckpointStatus>;
+  fixtureReviewStatus: FixtureReviewStatus | null;
+  checkpointReviews: Record<string, ReplayCheckpointReview>;
   selectedCheckpointId: string | null;
   onCheckpointStatusChange: (
     checkpointId: string,
     status: ReplayCheckpointStatus,
   ) => void;
+  onCheckpointNoteChange: (checkpointId: string, note: string) => void;
   onCheckpointJump: (checkpointId: string) => void;
 };
 
@@ -135,13 +136,21 @@ function getCheckpointRangeLabel(checkpoint: ReplayFixtureCheckpoint) {
   return `Snapshots ${checkpoint.targetStartSnapshotIndex}-${checkpoint.targetEndSnapshotIndex}`;
 }
 
+function formatReviewStatus(status: FixtureReviewStatus | null) {
+  if (!status) {
+    return "No fixture loaded";
+  }
+
+  return status.replaceAll("_", " ");
+}
+
 function countCheckpointStatuses(
   checkpoints: ReplayFixtureCheckpoint[],
-  statuses: Record<string, ReplayCheckpointStatus>,
+  reviews: Record<string, ReplayCheckpointReview>,
 ) {
   return checkpoints.reduce(
     (counts, checkpoint) => {
-      const status = statuses[checkpoint.id] ?? "pending";
+      const status = reviews[checkpoint.id]?.status ?? "pending";
 
       if (status === "observed") {
         counts.observed += 1;
@@ -170,9 +179,11 @@ export function ReplayValidationGuide({
   assessment,
   onAssessmentChange,
   isFixtureRunModified,
-  checkpointStatuses,
+  fixtureReviewStatus,
+  checkpointReviews,
   selectedCheckpointId,
   onCheckpointStatusChange,
+  onCheckpointNoteChange,
   onCheckpointJump,
 }: ReplayValidationGuideProps) {
   const currentAssessment = assessment ?? "pending";
@@ -183,16 +194,21 @@ export function ReplayValidationGuide({
   ) ?? null;
   const checkpointFocus = currentCheckpoint ?? selectedCheckpoint ?? null;
   const checkpointCounts = activeFixture
-    ? countCheckpointStatuses(activeFixture.checkpoints, checkpointStatuses)
+    ? countCheckpointStatuses(activeFixture.checkpoints, checkpointReviews)
     : { observed: 0, failed: 0 };
   const pendingCheckpointCount = activeFixture
     ? activeFixture.checkpoints.length -
       checkpointCounts.observed -
       checkpointCounts.failed
     : 0;
+  const nextPendingCheckpoint =
+    activeFixture?.checkpoints.find(
+      (checkpoint) =>
+        (checkpointReviews[checkpoint.id]?.status ?? "pending") === "pending",
+    ) ?? null;
 
   return (
-    <section className="panel p-6 xl:col-span-2">
+    <section id="fixture-proof-guide" className="panel p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl">
           <p className="eyebrow">Replay validation</p>
@@ -270,7 +286,7 @@ export function ReplayValidationGuide({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-4">
+      <div className="mt-5 grid gap-3 md:grid-cols-5">
         <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
           <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
             Total checkpoints
@@ -300,18 +316,31 @@ export function ReplayValidationGuide({
             Review state
           </p>
           <p className="mt-2 text-lg font-semibold text-stone-900">
-            {activeFixture
-              ? pendingCheckpointCount > 0
-                ? "Pending"
-                : "Checkpointed"
-              : "No fixture loaded"}
+            {formatReviewStatus(fixtureReviewStatus)}
           </p>
           <p className="mt-2 text-sm leading-6 text-stone-700">
             {activeFixture
-              ? pendingCheckpointCount > 0
+              ? fixtureReviewStatus === "not_started"
+                ? "No checkpoint has been marked yet."
+                : pendingCheckpointCount > 0
                 ? `${pendingCheckpointCount} checkpoint${pendingCheckpointCount === 1 ? "" : "s"} still need operator judgment.`
-                : "Every checkpoint has been marked observed or failed."
+                : fixtureReviewStatus === "completed_with_failures"
+                  ? "Every checkpoint has been reviewed and at least one failed."
+                  : "Every checkpoint has been reviewed and all were observed."
               : "Load a fixture to begin a disciplined review."}
+          </p>
+        </article>
+        <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
+          <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+            Next pending
+          </p>
+          <p className="mt-2 text-lg font-semibold text-stone-900">
+            {nextPendingCheckpoint?.label ?? "None"}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-stone-700">
+            {nextPendingCheckpoint
+              ? getCheckpointRangeLabel(nextPendingCheckpoint)
+              : "No unchecked checkpoint remains for this fixture."}
           </p>
         </article>
       </div>
@@ -371,7 +400,8 @@ export function ReplayValidationGuide({
               </p>
               <div className="mt-3 space-y-3">
                 {activeFixture.checkpoints.map((checkpoint) => {
-                  const status = checkpointStatuses[checkpoint.id] ?? "pending";
+                  const review = checkpointReviews[checkpoint.id];
+                  const status = review?.status ?? "pending";
                   const isActive = isCheckpointActive(
                     checkpoint,
                     currentSnapshotIndex,
@@ -456,6 +486,23 @@ export function ReplayValidationGuide({
                           </button>
                         ))}
                       </div>
+
+                      <label className="mt-4 block">
+                        <span className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                          Operator note
+                        </span>
+                        <textarea
+                          value={review?.note ?? ""}
+                          onChange={(event) =>
+                            onCheckpointNoteChange(
+                              checkpoint.id,
+                              event.target.value,
+                            )
+                          }
+                          rows={2}
+                          className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-stone-900"
+                        />
+                      </label>
                     </article>
                   );
                 })}
