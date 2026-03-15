@@ -6,7 +6,10 @@ type TranscriptPanelProps = {
   recentTurns: TranscriptTurn[];
   currentTurn: TranscriptTurn | null;
   currentTurnIndex: number;
+  currentSnapshotIndex: number;
   totalTurns: number;
+  replaySourceLabel: string;
+  checkpointFocusLabel: string | null;
   isAutoplaying: boolean;
   onNext: () => void;
   onPrevious: () => void;
@@ -24,13 +27,18 @@ export function TranscriptPanel({
   recentTurns,
   currentTurn,
   currentTurnIndex,
+  currentSnapshotIndex,
   totalTurns,
+  replaySourceLabel,
+  checkpointFocusLabel,
   isAutoplaying,
   onNext,
   onPrevious,
   onReset,
   onAutoplayToggle,
 }: TranscriptPanelProps) {
+  const isSeedSnapshot = currentSnapshotIndex === 0;
+
   return (
     <section className="panel min-h-80 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -39,14 +47,26 @@ export function TranscriptPanel({
           <h2 className="mt-2 text-2xl font-semibold text-stone-900">
             {guestName} live monitor
           </h2>
-          <p className="mt-2 text-sm text-stone-600">Session {sessionId}</p>
+          <p className="mt-2 text-sm text-stone-600">
+            Session {sessionId} | {replaySourceLabel}
+          </p>
+          {checkpointFocusLabel ? (
+            <p className="mt-2 text-sm text-amber-800">
+              Checkpoint focus: {checkpointFocusLabel}
+            </p>
+          ) : null}
         </div>
         <div className="rounded-2xl border border-stone-200 bg-stone-50/80 px-4 py-3 text-right">
           <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
             Replay position
           </p>
           <p className="mt-1 text-2xl font-semibold text-stone-900">
-            {Math.max(currentTurnIndex + 1, 0)} / {totalTurns}
+            {isSeedSnapshot
+              ? "Seed snapshot"
+              : `Turn ${Math.max(currentTurnIndex + 1, 0)} / ${totalTurns}`}
+          </p>
+          <p className="mt-1 text-sm text-stone-600">
+            Snapshot {currentSnapshotIndex} / {totalTurns}
           </p>
         </div>
       </div>
@@ -87,7 +107,7 @@ export function TranscriptPanel({
 
       <div className="mt-6 rounded-3xl border border-stone-200 bg-stone-950 px-5 py-6 text-stone-50">
         <p className="text-xs uppercase tracking-[0.16em] text-amber-300">
-          Current turn
+          {isSeedSnapshot ? "Current turn" : `Current turn | ${currentTurnIndex + 1}`}
         </p>
         {currentTurn ? (
           <>
@@ -120,11 +140,16 @@ export function TranscriptPanel({
             recentTurns.map((turn) => (
               <article
                 key={turn.id}
-                className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4"
+                className={`rounded-2xl border p-4 ${
+                  currentTurn?.id === turn.id
+                    ? "border-amber-300 bg-amber-50/70"
+                    : "border-stone-200 bg-stone-50/70"
+                }`}
               >
                 <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.14em] text-stone-500">
                   <span>{speakerLabel(turn.speaker)}</span>
                   <span>{turn.timestamp}</span>
+                  {currentTurn?.id === turn.id ? <span>Current snapshot</span> : null}
                 </div>
                 <p className="mt-2 text-base leading-7 text-stone-800">
                   {turn.text}
