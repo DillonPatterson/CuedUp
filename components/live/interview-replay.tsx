@@ -146,6 +146,7 @@ export function InterviewReplay({
   );
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
+  const [showEngineDetail, setShowEngineDetail] = useState(false);
   const activeHandoff = useMemo(
     () => (isFreshInterview ? buildFreshReplayHandoff() : handoff),
     [handoff, isFreshInterview],
@@ -245,6 +246,7 @@ export function InterviewReplay({
       setReplaySource(buildNewInterviewSource());
       setRestoreNotice(null);
       setIsUpdatesOpen(false);
+      setShowEngineDetail(false);
     });
 
     const nextUrl = `${window.location.pathname}${window.location.hash || "#listening-sandbox"}`;
@@ -433,6 +435,7 @@ export function InterviewReplay({
       setRestoreNotice(
         "Cleared browser-local replay state. Use Clear session inside the listening sandbox if you also want to wipe the sandbox draft.",
       );
+      setShowEngineDetail(false);
     });
     if (isFreshInterview) {
       handleResetToFreshInterview();
@@ -568,34 +571,86 @@ export function InterviewReplay({
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <ThreadBank
-          sessionId={displaySessionId}
-          unresolvedThreads={currentSnapshot.unresolvedThreads}
-          turnCount={currentSnapshot.conversationState.turnCount}
-        />
-        <NudgeRail
-          sessionId={displaySessionId}
-          currentMode={currentSnapshot.conversationState.currentMode}
-          staleNudgeGuard={currentSnapshot.conversationState.staleNudgeGuard}
-          candidateNextMoves={currentSnapshot.topMoves}
-          surfacedCue={currentSnapshot.surfaceCue}
-          currentDecision={currentSnapshot.decisionLogEntry}
-        />
-        <PresenceDecisionLog
-          currentDecision={currentSnapshot.decisionLogEntry}
-          guardDecisions={currentSnapshot.guardDecisions}
-          recentDecisions={recentDecisions}
-        />
-      </div>
+      <section className="panel p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="max-w-3xl">
+            <p className="eyebrow">Engine detail</p>
+            <p className="mt-2 text-sm leading-6 text-stone-700">
+              Keep the listening and sorting workspace in view by default. Open the
+              deeper thread, nudge, guard, and topic panels only when you need them.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowEngineDetail((value) => !value)}
+            className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+          >
+            {showEngineDetail ? "Hide engine detail" : "Show engine detail"}
+          </button>
+        </div>
 
-      <TopicMap
-        sessionId={displaySessionId}
-        coveredVeins={currentSnapshot.conversationState.coveredVeins}
-        storyVeinProgress={currentSnapshot.storyVeinProgress}
-        emotionalHeat={currentSnapshot.conversationState.emotionalHeat}
-        closureConfidence={currentSnapshot.conversationState.closureConfidence}
-      />
+        {showEngineDetail ? (
+          <div className="mt-5 space-y-6">
+            <div className="grid gap-6 xl:grid-cols-3">
+              <ThreadBank
+                sessionId={displaySessionId}
+                unresolvedThreads={currentSnapshot.unresolvedThreads}
+                turnCount={currentSnapshot.conversationState.turnCount}
+              />
+              <NudgeRail
+                sessionId={displaySessionId}
+                currentMode={currentSnapshot.conversationState.currentMode}
+                staleNudgeGuard={currentSnapshot.conversationState.staleNudgeGuard}
+                candidateNextMoves={currentSnapshot.topMoves}
+                surfacedCue={currentSnapshot.surfaceCue}
+                currentDecision={currentSnapshot.decisionLogEntry}
+              />
+              <PresenceDecisionLog
+                currentDecision={currentSnapshot.decisionLogEntry}
+                guardDecisions={currentSnapshot.guardDecisions}
+                recentDecisions={recentDecisions}
+              />
+            </div>
+
+            <TopicMap
+              sessionId={displaySessionId}
+              coveredVeins={currentSnapshot.conversationState.coveredVeins}
+              storyVeinProgress={currentSnapshot.storyVeinProgress}
+              emotionalHeat={currentSnapshot.conversationState.emotionalHeat}
+              closureConfidence={currentSnapshot.conversationState.closureConfidence}
+            />
+          </div>
+        ) : (
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                Unresolved threads
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-stone-900">
+                {currentSnapshot.unresolvedThreads.length}
+              </p>
+            </article>
+            <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                Surfaced cue
+              </p>
+              <p className="mt-2 text-sm font-medium leading-6 text-stone-900">
+                {currentSnapshot.surfaceCue?.text ?? "No cue surfaced"}
+              </p>
+            </article>
+            <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                Guard outcome
+              </p>
+              <p className="mt-2 text-sm font-medium leading-6 text-stone-900">
+                {currentSnapshot.decisionLogEntry.formattedCue ??
+                  currentSnapshot.decisionLogEntry.candidateLabel ??
+                  currentSnapshot.decisionLogEntry.outcome}
+              </p>
+            </article>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
