@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "state:replay": "tsx scripts/replay-conversation-state.ts"
+    "state:replay": "tsx scripts/replay-conversation-state.ts",
+    "replay:ingestion-contract": "tsx scripts/verify-replay-turn-normalization.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",

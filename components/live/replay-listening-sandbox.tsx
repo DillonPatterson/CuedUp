@@ -2,7 +2,7 @@
 
 import { startTransition, useEffect, useRef, useState } from "react";
 import type { TranscriptTurn } from "@/types";
-import type { ManualTranscriptTurnDraft } from "@/lib/transcript/manual-turns";
+import type { ReplayTranscriptTurnDraft } from "@/lib/transcript/manual-turns";
 import {
   type BrowserSpeechRecognition,
   getBrowserSpeechRecognitionConstructor,
@@ -11,7 +11,7 @@ import {
 type ReplayListeningSandboxProps = {
   engineSessionId: string;
   replaySourceLabel: string;
-  onCommitDrafts: (drafts: ManualTranscriptTurnDraft[]) => void;
+  onCommitDrafts: (drafts: ReplayTranscriptTurnDraft[]) => void;
 };
 
 type ListeningCommitMode = "single_turn" | "per_segment";
@@ -483,7 +483,7 @@ export function ReplayListeningSandbox({
 
   function handleCommitDrafts() {
     const nextScores = buildCommitScores(scoreMode, customScores);
-    let draftsToCommit: ManualTranscriptTurnDraft[] = [];
+    let draftsToCommit: ReplayTranscriptTurnDraft[] = [];
 
     if (commitMode === "single_turn") {
       const normalizedDraft = normalizeTranscript(`${draftText} ${interimText}`);
@@ -495,6 +495,7 @@ export function ReplayListeningSandbox({
 
       draftsToCommit = [
         {
+          source: "listening_sandbox_draft",
           speaker,
           text: normalizedDraft,
           ...nextScores,
@@ -509,6 +510,7 @@ export function ReplayListeningSandbox({
       }
 
       draftsToCommit = segments.map((segment) => ({
+        source: "listening_sandbox_segment",
         speaker,
         text: segment.text,
         ...nextScores,

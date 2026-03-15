@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { TranscriptTurn } from "@/types";
-import type { ManualTranscriptTurnDraft } from "@/lib/transcript/manual-turns";
+import type { ReplayTranscriptTurnDraft } from "@/lib/transcript/manual-turns";
 import type { ReplayFixtureDefinition } from "@/lib/mock/replay-fixtures";
 
 type ReplayTranscriptInputProps = {
@@ -10,13 +10,14 @@ type ReplayTranscriptInputProps = {
   activeFixtureId: string | null;
   replaySourceLabel: string;
   replaySourceDetail: string;
-  onAppend: (draft: ManualTranscriptTurnDraft) => void;
+  onAppend: (draft: ReplayTranscriptTurnDraft) => void;
   onImport: (rawTranscript: string) => void;
   onLoadFixture: (fixtureId: string) => void;
   onResetToSeededSession: () => void;
 };
 
-const initialDraft: ManualTranscriptTurnDraft = {
+const initialDraft: ReplayTranscriptTurnDraft = {
+  source: "manual_replay_input",
   speaker: "host",
   text: "",
   energyScore: 0.5,

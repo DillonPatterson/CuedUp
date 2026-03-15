@@ -19,9 +19,12 @@ import {
 import { transcriptTurnSchema } from "@/lib/schemas/transcript";
 import { buildInterviewSessionTimeline } from "@/lib/state/interview-session-timeline";
 import {
-  appendManualTranscriptTurn,
+  appendReplayTranscriptTurns,
   importReplayTranscriptTurnDrafts,
   importReplayTranscriptTurns,
+  parseReplayTurnSourceMetadataRecord,
+  type ReplayTranscriptTurnDraft,
+  type ReplayTurnSourceMetadata,
 } from "@/lib/transcript/manual-turns";
 import {
   buildInitialProofSession,
@@ -92,6 +95,7 @@ function readStoredReplaySession(engineSessionId: string) {
       currentSnapshotIndex?: unknown;
       replaySource?: unknown;
       selectedCheckpointId?: unknown;
+      turnSources?: unknown;
     };
     const parsedTurns = transcriptTurnSchema.array().safeParse(parsed.turns);
 
@@ -113,6 +117,7 @@ function readStoredReplaySession(engineSessionId: string) {
         typeof parsed.selectedCheckpointId === "string"
           ? parsed.selectedCheckpointId
           : null,
+      turnSources: parseReplayTurnSourceMetadataRecord(parsed.turnSources),
     };
   } catch {
     return null;
@@ -139,6 +144,9 @@ export function InterviewReplay({
   // Replay owns an ephemeral local copy of turns so manual appends stay dev-only
   // and do not pretend to be canonical persisted session truth.
   const [replayLocalTurns, setReplayLocalTurns] = useState(transcriptTurns);
+  const [replayTurnSources, setReplayTurnSources] = useState<
+    Record<string, ReplayTurnSourceMetadata>
+  >({});
   const timeline = useMemo(
     () =>
       buildInterviewSessionTimeline(
@@ -218,6 +226,7 @@ export function InterviewReplay({
 
     startTransition(() => {
       setReplayLocalTurns(storedReplaySession.turns);
+      setReplayTurnSources(storedReplaySession.turnSources);
       setCurrentSnapshotIndex(storedReplaySession.currentSnapshotIndex);
       setReplaySource(storedReplaySession.replaySource);
       setSelectedCheckpointId(storedReplaySession.selectedCheckpointId);
@@ -262,6 +271,7 @@ export function InterviewReplay({
         replaySessionStorageKey(engineSessionId),
         JSON.stringify({
           turns: replayLocalTurns,
+          turnSources: replayTurnSources,
           currentSnapshotIndex,
           replaySource,
           selectedCheckpointId,
@@ -274,6 +284,7 @@ export function InterviewReplay({
     currentSnapshotIndex,
     engineSessionId,
     replayLocalTurns,
+    replayTurnSources,
     replaySource,
     selectedCheckpointId,
   ]);
@@ -322,12 +333,16 @@ export function InterviewReplay({
     nextSnapshotIndex: number,
     nextReplaySource?: ReplaySourceState,
     nextSelectedCheckpointId?: string | null,
+    nextReplayTurnSources?: Record<string, ReplayTurnSourceMetadata>,
   ) {
     startTransition(() => {
       // Replacing replay-local turns intentionally discards prior replay-only
       // fixture/import/manual state so the timeline and guard output rebuild
       // from one canonical local stream only.
       setReplayLocalTurns(nextTurns);
+      if (nextReplayTurnSources) {
+        setReplayTurnSources(nextReplayTurnSources);
+      }
       setCurrentSnapshotIndex(nextSnapshotIndex);
       setIsAutoplaying(false);
       if (nextReplaySource) {
@@ -395,39 +410,49 @@ export function InterviewReplay({
   }
 
   function handleAppendTurn(
-    draft: Parameters<typeof appendManualTranscriptTurn>[2],
+    draft: ReplayTranscriptTurnDraft,
   ) {
     handleAppendDrafts([draft], "manual turn");
   }
 
   function handleAppendDrafts(
-    drafts: Parameters<typeof appendManualTranscriptTurn>[2][],
+    drafts: ReplayTranscriptTurnDraft[],
     source: ReplayAppendSource,
   ) {
-    const nextTurns = drafts.reduce(
-      (currentTurns, draft) =>
-        appendManualTranscriptTurn(currentTurns, engineSessionId, draft),
+    const appendResult = appendReplayTranscriptTurns(
       replayLocalTurns,
+      engineSessionId,
+      drafts,
     );
 
     applyReplayLocalTurns(
-      nextTurns,
-      nextTurns.length,
+      appendResult.turns,
+      appendResult.turns.length,
       buildReplaySourceAfterAppend(source),
+      undefined,
+      {
+        ...replayTurnSources,
+        ...appendResult.sourceMetadata,
+      },
     );
   }
 
   function handleImportTranscript(rawTranscript: string) {
-    const nextTurns = importReplayTranscriptTurns(
+    const appendResult = importReplayTranscriptTurns(
       replayLocalTurns,
       engineSessionId,
       rawTranscript,
     );
 
     applyReplayLocalTurns(
-      nextTurns,
-      nextTurns.length,
+      appendResult.turns,
+      appendResult.turns.length,
       buildReplaySourceAfterAppend("JSON import"),
+      undefined,
+      {
+        ...replayTurnSources,
+        ...appendResult.sourceMetadata,
+      },
     );
   }
 
@@ -438,20 +463,22 @@ export function InterviewReplay({
       throw new Error("Replay fixture was not found.");
     }
 
-    const nextTurns = importReplayTranscriptTurnDrafts(
+    const appendResult = importReplayTranscriptTurnDrafts(
       [],
       engineSessionId,
       fixture.transcript,
+      "fixture_load",
     );
 
     // Fixture loads intentionally replace the replay-local turn stream rather
     // than append to it, so the view should jump straight to the latest loaded
     // snapshot instead of showing the empty seeded state.
     applyReplayLocalTurns(
-      nextTurns,
-      nextTurns.length,
+      appendResult.turns,
+      appendResult.turns.length,
       buildFixtureReplaySource(fixture),
       fixture.checkpoints[0]?.id ?? null,
+      appendResult.sourceMetadata,
     );
   }
 
@@ -463,6 +490,7 @@ export function InterviewReplay({
       INITIAL_SNAPSHOT_INDEX,
       buildSeededReplaySource(),
       null,
+      {},
     );
   }
 
@@ -624,6 +652,7 @@ export function InterviewReplay({
             totalTurns={replayLocalTurns.length}
             replaySourceLabel={replaySource.label}
             checkpointFocusLabel={checkpointFocusLabel}
+            turnSources={replayTurnSources}
             onNext={handleNext}
             onPrevious={handlePrevious}
             onReset={handleReset}

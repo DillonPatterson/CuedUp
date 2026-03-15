@@ -1,4 +1,5 @@
 import type { TranscriptTurn } from "@/types";
+import type { ReplayTurnSourceMetadata } from "@/lib/transcript/manual-turns";
 
 type TranscriptPanelProps = {
   sessionId: string;
@@ -10,6 +11,7 @@ type TranscriptPanelProps = {
   totalTurns: number;
   replaySourceLabel: string;
   checkpointFocusLabel: string | null;
+  turnSources: Record<string, ReplayTurnSourceMetadata>;
   isAutoplaying: boolean;
   onNext: () => void;
   onPrevious: () => void;
@@ -31,6 +33,7 @@ export function TranscriptPanel({
   totalTurns,
   replaySourceLabel,
   checkpointFocusLabel,
+  turnSources,
   isAutoplaying,
   onNext,
   onPrevious,
@@ -38,6 +41,9 @@ export function TranscriptPanel({
   onAutoplayToggle,
 }: TranscriptPanelProps) {
   const isSeedSnapshot = currentSnapshotIndex === 0;
+  const currentTurnSourceLabel = currentTurn
+    ? (turnSources[currentTurn.id]?.label ?? "Seeded or fixture transcript")
+    : null;
 
   return (
     <section id="transcript-replay" className="panel min-h-80 p-6">
@@ -118,7 +124,8 @@ export function TranscriptPanel({
                 {speakerLabel(currentTurn.speaker)}
               </span>
               <span>{currentTurn.timestamp}</span>
-              <span>Source {replaySourceLabel}</span>
+              <span>Input {currentTurnSourceLabel}</span>
+              <span>Replay {replaySourceLabel}</span>
               <span>Energy {currentTurn.energyScore.toFixed(2)}</span>
               <span>Specificity {currentTurn.specificityScore.toFixed(2)}</span>
             </div>
@@ -152,6 +159,9 @@ export function TranscriptPanel({
                 <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.14em] text-stone-500">
                   <span>{speakerLabel(turn.speaker)}</span>
                   <span>{turn.timestamp}</span>
+                  <span>
+                    {turnSources[turn.id]?.label ?? "Seeded or fixture transcript"}
+                  </span>
                   {currentTurn?.id === turn.id ? <span>Current snapshot</span> : null}
                 </div>
                 <p className="mt-2 text-base leading-7 text-stone-800">
