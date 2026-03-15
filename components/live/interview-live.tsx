@@ -17,25 +17,27 @@ export function InterviewLive({
   transcriptTurns,
 }: InterviewLiveProps) {
   void engineSessionId;
-  void handoff;
   const transcriptOrganization = useMemo(
-    () => buildReplayTranscriptOrganization(transcriptTurns, {}),
-    [transcriptTurns],
+    () => buildReplayTranscriptOrganization(transcriptTurns, {}, { handoff }),
+    [handoff, transcriptTurns],
   );
   const currentTurn = transcriptTurns.at(-1) ?? null;
+  const currentTurnSignals = currentTurn
+    ? transcriptOrganization.sourceMetadataByTurnId[currentTurn.id] ?? null
+    : null;
 
   return (
     <section className="panel min-h-[32rem] px-6 py-8 md:px-10 md:py-10">
-      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="flex min-h-[12rem] items-center justify-center rounded-[2rem] border border-stone-200 bg-stone-50/70 px-6 py-8">
-          <div className="h-16 w-full max-w-md rounded-2xl border border-dashed border-stone-200 bg-white/40" />
-        </div>
-        <ConversationMemoryPanel
-          currentTurn={currentTurn}
-          organization={transcriptOrganization}
-          surfaceLabel="Live analyzer"
-        />
-      </div>
+      <ConversationMemoryPanel
+        turns={transcriptTurns}
+        currentTurn={currentTurn}
+        currentTurnSignals={currentTurnSignals}
+        organization={transcriptOrganization}
+        modeLabel="live"
+        listeningStateLabel="Not connected"
+        sourceStateLabel="Mock transcript"
+        positionLabel={`Committed turns ${transcriptTurns.length}`}
+      />
     </section>
   );
 }

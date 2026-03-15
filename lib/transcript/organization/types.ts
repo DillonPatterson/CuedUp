@@ -1,3 +1,10 @@
+import type {
+  ReplayAffectiveIntensity,
+  ReplayCompletionStatus,
+  ReplayTurnAnalysis,
+} from "@/lib/transcript/turn-analysis";
+import type { ReplayTurnMemory } from "@/lib/transcript/turn-memory";
+
 export type TranscriptDerivedAnnotationKind =
   | "entity"
   | "theme"
@@ -24,6 +31,39 @@ export interface TranscriptDerivedAnnotation {
   spanRefs: TranscriptSpanRef[];
 }
 
+export interface TranscriptOrganizationSourceMetadata {
+  analysis: ReplayTurnAnalysis;
+  memory: ReplayTurnMemory;
+}
+
+export type TranscriptDebtReason =
+  | "opened_unresolved"
+  | "incomplete_turn"
+  | "truncated_turn"
+  | "interruption"
+  | "affective_weight"
+  | "deflection"
+  | "stale_unresolved"
+  | "revisited"
+  | "resolution_language";
+
+export interface TranscriptCompletionDebtEntry {
+  id: string;
+  label: string;
+  sourceKind: Exclude<TranscriptDerivedAnnotationKind, "entity">;
+  openedAtTurnId: string;
+  lastSeenTurnId: string;
+  lastSeenAt: string | null;
+  turnIds: string[];
+  debtScore: number;
+  debtReasons: TranscriptDebtReason[];
+  interrupted: boolean;
+  affectiveWeight: ReplayAffectiveIntensity;
+  completionStatus: ReplayCompletionStatus;
+  currentTurnLinked: boolean;
+  bringBackPriority: TranscriptRecallReadinessBand;
+}
+
 export interface TranscriptOrganizationBucketItem {
   id: string;
   label: string;
@@ -34,6 +74,12 @@ export interface TranscriptOrganizationBucketItem {
   currentTurnLinked: boolean;
   lastSeenTurnId: string | null;
   lastSeenAt: string | null;
+  completionDebtScore?: number;
+  completionDebtReasons?: TranscriptDebtReason[];
+  interrupted?: boolean;
+  affectiveWeight?: ReplayAffectiveIntensity;
+  completionStatus?: ReplayCompletionStatus;
+  bringBackPriority?: TranscriptRecallReadinessBand;
 }
 
 export type TranscriptRecallRecency = "fresh" | "recent" | "stale";
@@ -51,8 +97,13 @@ export interface TranscriptRecallCandidate {
   turnIds: string[];
   salience: TranscriptOrganizationSalience;
   recency: TranscriptRecallRecency;
+  lastSeenAt: string | null;
   relevanceToCurrentTurn: TranscriptRecallRelevance;
   readiness: TranscriptRecallReadinessBand;
+  completionDebtScore: number;
+  completionDebtReasons: TranscriptDebtReason[];
+  interrupted: boolean;
+  affectiveWeight: ReplayAffectiveIntensity;
   reason: string;
 }
 
@@ -69,6 +120,7 @@ export interface TranscriptRetrievalRecord {
 
 export interface TranscriptOrganizationSnapshot {
   sessionId: string | null;
+  sourceMetadataByTurnId: Record<string, TranscriptOrganizationSourceMetadata>;
   annotations: TranscriptDerivedAnnotation[];
   annotationsByTurnId: Record<string, TranscriptDerivedAnnotation[]>;
   retrievalRecords: TranscriptRetrievalRecord[];
@@ -76,6 +128,7 @@ export interface TranscriptOrganizationSnapshot {
   openThreads: TranscriptOrganizationBucketItem[];
   notableClaims: TranscriptOrganizationBucketItem[];
   tensionWatch: TranscriptOrganizationBucketItem[];
+  completionDebt: TranscriptCompletionDebtEntry[];
   recallCandidates: TranscriptRecallCandidate[];
   summary: {
     entities: string[];

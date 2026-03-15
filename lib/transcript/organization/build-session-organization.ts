@@ -1,17 +1,20 @@
-import type { TranscriptTurn } from "@/types";
+import type { DossierLiveHandoff, TranscriptTurn } from "@/types";
 import type { ReplayCommittedTurnMetadata } from "@/lib/transcript/manual-turns";
+import { buildReplayDossierLexicon } from "@/lib/transcript/lexical-tiers";
 import { analyzeReplayCommittedTurn } from "@/lib/transcript/turn-analysis";
 import { extractReplayTurnMemory } from "@/lib/transcript/turn-memory";
+import { buildTranscriptCompletionDebt } from "@/lib/transcript/organization/build-completion-debt";
 import { buildTranscriptRetrievalRecords } from "@/lib/transcript/organization/build-retrieval-records";
 import {
   buildAnnotationsFromReplayMetadata,
-  type TranscriptOrganizationSourceMetadata,
 } from "@/lib/transcript/organization/from-replay-metadata";
 import type {
+  TranscriptCompletionDebtEntry,
   TranscriptDerivedAnnotation,
   TranscriptOrganizationBucketItem,
   TranscriptOrganizationSnapshot,
   TranscriptOrganizationSalience,
+  TranscriptOrganizationSourceMetadata,
   TranscriptRecallCandidate,
   TranscriptRecallReadinessBand,
   TranscriptRecallRecency,
@@ -21,6 +24,10 @@ import type {
 const EMERGING_THEME_WINDOW = 6;
 const MAX_BUCKET_ITEMS = 4;
 const MAX_RECALL_CANDIDATES = 5;
+
+type BuildReplayTranscriptOrganizationOptions = {
+  handoff?: DossierLiveHandoff | null;
+};
 
 type GroupedAnnotation = {
   key: string;
@@ -33,7 +40,15 @@ type GroupedAnnotation = {
   lastSeenTurnId: string | null;
   lastSeenAt: string | null;
   lastSeenIndex: number;
+  openedAtTurnId: string | null;
+  openedAtIndex: number;
 };
+
+function isDebtSourceKind(
+  value: TranscriptDerivedAnnotation["kind"],
+): value is Exclude<TranscriptDerivedAnnotation["kind"], "entity"> {
+  return value !== "entity";
+}
 
 function salienceRank(value: TranscriptOrganizationSalience) {
   switch (value) {
@@ -81,6 +96,14 @@ function recallReadinessRank(value: TranscriptRecallReadinessBand) {
   }
 }
 
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function formatDebtReason(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 function collectUniqueLabels(
   annotations: TranscriptDerivedAnnotation[],
   kind: TranscriptDerivedAnnotation["kind"],
@@ -100,16 +123,21 @@ function collectUniqueLabels(
 
 function resolveTurnMetadata(
   turn: TranscriptTurn,
+  previousTurn: TranscriptTurn | null,
   replayMetadata: ReplayCommittedTurnMetadata | undefined,
+  dossierLexicon: ReturnType<typeof buildReplayDossierLexicon>,
 ): TranscriptOrganizationSourceMetadata {
-  if (replayMetadata) {
+  if (replayMetadata && !dossierLexicon) {
     return {
       analysis: replayMetadata.analysis,
       memory: replayMetadata.memory,
     };
   }
 
-  const analysis = analyzeReplayCommittedTurn(turn);
+  const analysis = analyzeReplayCommittedTurn(turn, {
+    previousTurn,
+    dossierLexicon,
+  });
 
   return {
     analysis,
@@ -155,7 +183,7 @@ function buildGroupedAnnotations(
   const groups = new Map<string, GroupedAnnotation>();
 
   annotations.forEach((annotation) => {
-    const key = `${annotation.kind}:${annotation.label}`;
+    const key = `${annotation.kind}:${normalizeSearchText(annotation.label)}`;
     const turnIndex = turnIndexById[annotation.turnId] ?? -1;
     const turn = turnById[annotation.turnId];
     const existing = groups.get(key);
@@ -172,6 +200,8 @@ function buildGroupedAnnotations(
         lastSeenTurnId: annotation.turnId,
         lastSeenAt: turn?.timestamp ?? null,
         lastSeenIndex: turnIndex,
+        openedAtTurnId: annotation.turnId,
+        openedAtIndex: turnIndex,
       });
       return;
     }
@@ -189,6 +219,11 @@ function buildGroupedAnnotations(
       existing.currentTurnLinked = true;
     }
 
+    if (turnIndex <= existing.openedAtIndex) {
+      existing.openedAtIndex = turnIndex;
+      existing.openedAtTurnId = annotation.turnId;
+    }
+
     if (turnIndex >= existing.lastSeenIndex) {
       existing.lastSeenIndex = turnIndex;
       existing.lastSeenTurnId = annotation.turnId;
@@ -203,12 +238,33 @@ function buildGroupedAnnotations(
   };
 }
 
+function buildDebtLookupKey(label: string, sourceKind: TranscriptDerivedAnnotation["kind"]) {
+  return `${sourceKind}:${normalizeSearchText(label)}`;
+}
+
+function toDebtMap(completionDebt: TranscriptCompletionDebtEntry[]) {
+  return completionDebt.reduce<Record<string, TranscriptCompletionDebtEntry>>(
+    (result, entry) => {
+      result[buildDebtLookupKey(entry.label, entry.sourceKind)] = entry;
+      return result;
+    },
+    {},
+  );
+}
+
 function sortBucketItems(
   left: TranscriptOrganizationBucketItem,
   right: TranscriptOrganizationBucketItem,
 ) {
   if (left.currentTurnLinked !== right.currentTurnLinked) {
     return left.currentTurnLinked ? -1 : 1;
+  }
+
+  const debtDelta =
+    (right.completionDebtScore ?? 0) - (left.completionDebtScore ?? 0);
+
+  if (debtDelta !== 0) {
+    return debtDelta;
   }
 
   const salienceDelta =
@@ -229,7 +285,10 @@ function sortBucketItems(
 
 function buildBucketItem(
   group: GroupedAnnotation,
+  debtMap: Record<string, TranscriptCompletionDebtEntry>,
 ): TranscriptOrganizationBucketItem {
+  const completionDebt = debtMap[group.key];
+
   return {
     id: `bucket:${group.key}`,
     label: group.label,
@@ -240,12 +299,19 @@ function buildBucketItem(
     currentTurnLinked: group.currentTurnLinked,
     lastSeenTurnId: group.lastSeenTurnId,
     lastSeenAt: group.lastSeenAt,
+    completionDebtScore: completionDebt?.debtScore,
+    completionDebtReasons: completionDebt?.debtReasons,
+    interrupted: completionDebt?.interrupted,
+    affectiveWeight: completionDebt?.affectiveWeight,
+    completionStatus: completionDebt?.completionStatus,
+    bringBackPriority: completionDebt?.bringBackPriority,
   };
 }
 
 function buildEmergingThemes(
   groups: GroupedAnnotation[],
   totalTurnCount: number,
+  debtMap: Record<string, TranscriptCompletionDebtEntry>,
 ) {
   const minimumRecentIndex = Math.max(0, totalTurnCount - EMERGING_THEME_WINDOW);
 
@@ -256,31 +322,40 @@ function buildEmergingThemes(
         group.occurrenceCount >= 2 &&
         group.lastSeenIndex >= minimumRecentIndex,
     )
-    .map(buildBucketItem)
+    .map((group) => buildBucketItem(group, debtMap))
     .sort(sortBucketItems)
     .slice(0, MAX_BUCKET_ITEMS);
 }
 
-function buildOpenThreads(groups: GroupedAnnotation[]) {
+function buildOpenThreads(
+  groups: GroupedAnnotation[],
+  debtMap: Record<string, TranscriptCompletionDebtEntry>,
+) {
   return groups
     .filter((group) => group.sourceKind === "thread_cue")
-    .map(buildBucketItem)
+    .map((group) => buildBucketItem(group, debtMap))
     .sort(sortBucketItems)
     .slice(0, MAX_BUCKET_ITEMS);
 }
 
-function buildNotableClaims(groups: GroupedAnnotation[]) {
+function buildNotableClaims(
+  groups: GroupedAnnotation[],
+  debtMap: Record<string, TranscriptCompletionDebtEntry>,
+) {
   return groups
     .filter((group) => group.sourceKind === "claim")
-    .map(buildBucketItem)
+    .map((group) => buildBucketItem(group, debtMap))
     .sort(sortBucketItems)
     .slice(0, MAX_BUCKET_ITEMS);
 }
 
-function buildTensionWatch(groups: GroupedAnnotation[]) {
+function buildTensionWatch(
+  groups: GroupedAnnotation[],
+  debtMap: Record<string, TranscriptCompletionDebtEntry>,
+) {
   return groups
     .filter((group) => group.sourceKind === "tension")
-    .map(buildBucketItem)
+    .map((group) => buildBucketItem(group, debtMap))
     .sort(sortBucketItems)
     .slice(0, MAX_BUCKET_ITEMS);
 }
@@ -306,8 +381,17 @@ function getRecallRecency(
   return "stale";
 }
 
-function normalizeSearchText(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+function hasLexicalAnchor(candidateLabel: string, currentTurnText: string) {
+  const currentTurnTokens = new Set(
+    normalizeSearchText(currentTurnText)
+      .split(" ")
+      .filter((token) => token.length >= 4),
+  );
+
+  return normalizeSearchText(candidateLabel)
+    .split(" ")
+    .filter((token) => token.length >= 4)
+    .some((token) => currentTurnTokens.has(token));
 }
 
 function getRecallRelevance(
@@ -334,6 +418,10 @@ function getRecallRelevance(
     return "medium";
   }
 
+  if (hasLexicalAnchor(item.label, currentTurnText)) {
+    return "medium";
+  }
+
   return "low";
 }
 
@@ -341,6 +429,7 @@ function getRecallReadiness(
   item: TranscriptOrganizationBucketItem,
   recency: TranscriptRecallRecency,
   relevance: TranscriptRecallRelevance,
+  debtScore: number,
 ): TranscriptRecallReadinessBand {
   if (
     item.sourceKind === "tension" &&
@@ -362,7 +451,8 @@ function getRecallReadiness(
     salienceRank(item.salience) +
     recallRecencyRank(recency) +
     recallRelevanceRank(relevance) +
-    (item.occurrenceCount >= 2 ? 1 : 0);
+    (item.occurrenceCount >= 2 ? 1 : 0) +
+    (debtScore >= 7 ? 2 : debtScore >= 4 ? 1 : 0);
 
   if (readinessScore >= 8) {
     return "urgent";
@@ -383,8 +473,25 @@ function buildRecallReason(
   item: TranscriptOrganizationBucketItem,
   recency: TranscriptRecallRecency,
   relevance: TranscriptRecallRelevance,
+  completionDebt: TranscriptCompletionDebtEntry | undefined,
 ) {
   const fragments: string[] = [];
+
+  if (completionDebt) {
+    if (completionDebt.debtScore >= 7) {
+      fragments.push("high debt");
+    } else if (completionDebt.debtScore >= 4) {
+      fragments.push("rising debt");
+    }
+
+    const strongestDebtReason = completionDebt.debtReasons.find(
+      (reason) => reason !== "opened_unresolved",
+    );
+
+    if (strongestDebtReason) {
+      fragments.push(formatDebtReason(strongestDebtReason));
+    }
+  }
 
   if (item.currentTurnLinked) {
     fragments.push("linked to current turn");
@@ -411,6 +518,7 @@ function buildRecallCandidates(
   openThreads: TranscriptOrganizationBucketItem[],
   notableClaims: TranscriptOrganizationBucketItem[],
   tensionWatch: TranscriptOrganizationBucketItem[],
+  debtMap: Record<string, TranscriptCompletionDebtEntry>,
 ): TranscriptRecallCandidate[] {
   const currentTurnIndex =
     groupedAnnotations.currentTurnId
@@ -434,6 +542,8 @@ function buildRecallCandidates(
         currentTurnAnnotations,
         currentTurnText,
       );
+      const completionDebt = debtMap[buildDebtLookupKey(item.label, item.sourceKind)];
+      const completionDebtScore = completionDebt?.debtScore ?? 0;
 
       return {
         id: `recall:${item.id}`,
@@ -442,9 +552,24 @@ function buildRecallCandidates(
         turnIds: item.turnIds,
         salience: item.salience,
         recency,
+        lastSeenAt: item.lastSeenAt,
         relevanceToCurrentTurn,
-        readiness: getRecallReadiness(item, recency, relevanceToCurrentTurn),
-        reason: buildRecallReason(item, recency, relevanceToCurrentTurn),
+        readiness: getRecallReadiness(
+          item,
+          recency,
+          relevanceToCurrentTurn,
+          completionDebtScore,
+        ),
+        completionDebtScore,
+        completionDebtReasons: completionDebt?.debtReasons ?? [],
+        interrupted: completionDebt?.interrupted ?? false,
+        affectiveWeight: completionDebt?.affectiveWeight ?? "low",
+        reason: buildRecallReason(
+          item,
+          recency,
+          relevanceToCurrentTurn,
+          completionDebt,
+        ),
       };
     })
     .sort((left, right) => {
@@ -462,6 +587,12 @@ function buildRecallCandidates(
 
       if (relevanceDelta !== 0) {
         return relevanceDelta;
+      }
+
+      const debtDelta = right.completionDebtScore - left.completionDebtScore;
+
+      if (debtDelta !== 0) {
+        return debtDelta;
       }
 
       const recencyDelta =
@@ -486,22 +617,63 @@ function buildRecallCandidates(
 export function buildReplayTranscriptOrganization(
   turns: TranscriptTurn[],
   replayMetadata: Record<string, ReplayCommittedTurnMetadata>,
+  options: BuildReplayTranscriptOrganizationOptions = {},
 ): TranscriptOrganizationSnapshot {
-  const resolvedTurnMetadata = turns.reduce<
+  const dossierLexicon = buildReplayDossierLexicon(options.handoff);
+  const sourceMetadataByTurnId = turns.reduce<
     Record<string, TranscriptOrganizationSourceMetadata>
-  >((result, turn) => {
-    result[turn.id] = resolveTurnMetadata(turn, replayMetadata[turn.id]);
+  >((result, turn, index) => {
+    result[turn.id] = resolveTurnMetadata(
+      turn,
+      index > 0 ? turns[index - 1] ?? null : null,
+      replayMetadata[turn.id],
+      dossierLexicon,
+    );
     return result;
   }, {});
   const annotations = turns.flatMap((turn) =>
-    buildAnnotationsFromReplayMetadata(turn, resolvedTurnMetadata[turn.id]),
+    buildAnnotationsFromReplayMetadata(turn, sourceMetadataByTurnId[turn.id]),
   );
   const annotationsByTurnId = buildAnnotationsByTurnId(turns, annotations);
   const groupedAnnotations = buildGroupedAnnotations(annotations, turns);
-  const emergingThemes = buildEmergingThemes(groupedAnnotations.groups, turns.length);
-  const openThreads = buildOpenThreads(groupedAnnotations.groups);
-  const notableClaims = buildNotableClaims(groupedAnnotations.groups);
-  const tensionWatch = buildTensionWatch(groupedAnnotations.groups);
+  const completionDebt = buildTranscriptCompletionDebt(
+    turns,
+    sourceMetadataByTurnId,
+    groupedAnnotations.groups
+      .filter((group) => isDebtSourceKind(group.sourceKind))
+      .flatMap((group) =>
+        group.openedAtTurnId && group.lastSeenTurnId
+          ? [
+              {
+                key: group.key,
+                label: group.label,
+                sourceKind:
+                  group.sourceKind as Exclude<
+                    TranscriptDerivedAnnotation["kind"],
+                    "entity"
+                  >,
+                turnIds: group.turnIds,
+                occurrenceCount: group.occurrenceCount,
+                currentTurnLinked: group.currentTurnLinked,
+                lastSeenTurnId: group.lastSeenTurnId,
+                lastSeenAt: group.lastSeenAt,
+                lastSeenIndex: group.lastSeenIndex,
+                openedAtTurnId: group.openedAtTurnId,
+                openedAtIndex: group.openedAtIndex,
+              },
+            ]
+          : [],
+      ),
+  );
+  const debtMap = toDebtMap(completionDebt);
+  const emergingThemes = buildEmergingThemes(
+    groupedAnnotations.groups,
+    turns.length,
+    debtMap,
+  );
+  const openThreads = buildOpenThreads(groupedAnnotations.groups, debtMap);
+  const notableClaims = buildNotableClaims(groupedAnnotations.groups, debtMap);
+  const tensionWatch = buildTensionWatch(groupedAnnotations.groups, debtMap);
   const currentTurnAnnotations = groupedAnnotations.currentTurnId
     ? annotationsByTurnId[groupedAnnotations.currentTurnId] ?? []
     : [];
@@ -514,10 +686,12 @@ export function buildReplayTranscriptOrganization(
     openThreads,
     notableClaims,
     tensionWatch,
+    debtMap,
   );
 
   return {
     sessionId: turns[0]?.sessionId ?? null,
+    sourceMetadataByTurnId,
     annotations,
     annotationsByTurnId,
     retrievalRecords: buildTranscriptRetrievalRecords(turns, annotations),
@@ -525,6 +699,7 @@ export function buildReplayTranscriptOrganization(
     openThreads,
     notableClaims,
     tensionWatch,
+    completionDebt,
     recallCandidates,
     summary: {
       entities: collectUniqueLabels(annotations, "entity"),

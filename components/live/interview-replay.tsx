@@ -12,7 +12,6 @@ import { ReplayUpdatesPanel } from "@/components/live/replay-updates-panel";
 import { ReplayValidationGuide } from "@/components/live/replay-validation-guide";
 import { ThreadBank } from "@/components/live/thread-bank";
 import { TopicMap } from "@/components/live/topic-map";
-import { TranscriptPanel } from "@/components/live/transcript-panel";
 import {
   getReplayFixtureDefinition,
   replayFixtures,
@@ -149,6 +148,7 @@ export function InterviewReplay({
   handoff,
   transcriptTurns,
 }: InterviewReplayProps) {
+  void guestName;
   // Replay owns an ephemeral local copy of turns so manual appends stay dev-only
   // and do not pretend to be canonical persisted session truth.
   const [replayLocalTurns, setReplayLocalTurns] = useState(transcriptTurns);
@@ -165,6 +165,7 @@ export function InterviewReplay({
   );
   const [selectedCheckpointId, setSelectedCheckpointId] = useState<string | null>(null);
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
+  const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
   const visibleReplayTurns = useMemo(
     () => replayLocalTurns.slice(0, currentSnapshotIndex),
     [currentSnapshotIndex, replayLocalTurns],
@@ -199,8 +200,9 @@ export function InterviewReplay({
       buildReplayTranscriptOrganization(
         visibleReplayTurns,
         visibleReplayTurnMetadata,
+        { handoff },
       ),
-    [visibleReplayTurnMetadata, visibleReplayTurns],
+    [handoff, visibleReplayTurnMetadata, visibleReplayTurns],
   );
   const currentSnapshot = timeline.snapshots[currentSnapshotIndex];
   const currentTurnIndex = currentSnapshotIndex - 1;
@@ -245,13 +247,22 @@ export function InterviewReplay({
     activeFixture?.checkpoints.find(
       (checkpoint) => checkpoint.id === selectedCheckpointId,
     ) ?? null;
-  const checkpointFocusLabel =
-    currentCheckpoint?.label ?? selectedCheckpoint?.label ?? null;
-  const nextPendingCheckpoint =
-    activeFixture?.checkpoints.find(
-      (checkpoint) =>
-        (checkpointReviews[checkpoint.id]?.status ?? "pending") === "pending",
-    ) ?? null;
+  void currentCheckpoint;
+  void selectedCheckpoint;
+  const workspaceModeLabel =
+    activeFixture || replaySource.label.startsWith("Fixture:")
+      ? ("replay" as const)
+      : ("manual" as const);
+  const listeningStateLabel = activeFixture
+    ? "Fixture playback"
+    : replaySource.label === "Seeded mock session"
+      ? "Idle"
+      : "Listening sandbox ready";
+  const currentTurnSignals = currentSnapshot.currentTurn
+    ? transcriptOrganization.sourceMetadataByTurnId[
+        currentSnapshot.currentTurn.id
+      ] ?? null
+    : null;
 
   useEffect(() => {
     const storedReplaySession = readStoredReplaySession(engineSessionId);
@@ -620,13 +631,22 @@ export function InterviewReplay({
               and sandbox transcript commits all converge here.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleClearBrowserLocalReplayState}
-            className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
-          >
-            Wipe replay/proof restore state
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setIsUpdatesOpen((value) => !value)}
+              className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+            >
+              {isUpdatesOpen ? "Hide updates" : "Updates"}
+            </button>
+            <button
+              type="button"
+              onClick={handleClearBrowserLocalReplayState}
+              className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+            >
+              Wipe replay/proof restore state
+            </button>
+          </div>
         </div>
 
         {restoreNotice ? (
@@ -634,91 +654,80 @@ export function InterviewReplay({
             {restoreNotice}
           </div>
         ) : null}
-
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
-          <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-              Replay source
-            </p>
-            <p className="mt-2 text-lg font-semibold text-stone-900">
-              {replaySource.label}
-            </p>
-          </article>
-          <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-              Active fixture
-            </p>
-            <p className="mt-2 text-lg font-semibold text-stone-900">
-              {activeFixture?.label ?? "none"}
-            </p>
-          </article>
-          <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-              Checkpoint focus
-            </p>
-            <p className="mt-2 text-lg font-semibold text-stone-900">
-              {checkpointFocusLabel ?? "none"}
-            </p>
-          </article>
-          <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-              Next pending checkpoint
-            </p>
-            <p className="mt-2 text-lg font-semibold text-stone-900">
-              {nextPendingCheckpoint?.label ?? "none"}
-            </p>
-          </article>
-        </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-6">
-          <ReplayListeningSandbox
-            engineSessionId={engineSessionId}
-            replaySourceLabel={replaySource.label}
-            onCommitDrafts={(drafts) => handleAppendDrafts(drafts, "sandbox commit")}
-          />
-          <TranscriptPanel
-            sessionId={displaySessionId}
-            guestName={guestName}
-            recentTurns={currentSnapshot.recentTurns}
-            currentTurn={currentSnapshot.currentTurn}
-            currentTurnIndex={currentTurnIndex}
-            currentSnapshotIndex={currentSnapshotIndex}
-            totalTurns={replayLocalTurns.length}
-            replaySourceLabel={replaySource.label}
-            checkpointFocusLabel={checkpointFocusLabel}
-            turnMetadata={replayTurnMetadata}
-            onNext={handleNext}
-            onPrevious={handlePrevious}
-            onReset={handleReset}
-            onAutoplayToggle={handleAutoplayToggle}
-            isAutoplaying={isAutoplaying}
-          />
-          <ReplayTranscriptInput
-            fixtures={replayFixtures}
-            activeFixtureId={activeFixture?.id ?? null}
-            replaySourceLabel={replaySource.label}
-            replaySourceDetail={replaySource.detail}
-            onAppend={handleAppendTurn}
-            onImport={handleImportTranscript}
-            onLoadFixture={handleLoadFixture}
-            onResetToSeededSession={handleResetToSeededSession}
-          />
-        </div>
+      {isUpdatesOpen ? (
+        <ReplayUpdatesPanel onClose={() => setIsUpdatesOpen(false)} />
+      ) : null}
 
+      <ReplayListeningSandbox
+        engineSessionId={engineSessionId}
+        replaySourceLabel={replaySource.label}
+        onCommitDrafts={(drafts) => handleAppendDrafts(drafts, "sandbox commit")}
+      />
+
+      <ConversationMemoryPanel
+        turns={visibleReplayTurns}
+        currentTurn={currentSnapshot.currentTurn}
+        turnMetadata={visibleReplayTurnMetadata}
+        currentTurnSignals={currentTurnSignals}
+        organization={transcriptOrganization}
+        modeLabel={workspaceModeLabel}
+        listeningStateLabel={listeningStateLabel}
+        sourceStateLabel={replaySource.label}
+        positionLabel={`Snapshot ${currentSnapshotIndex} / ${replayLocalTurns.length}`}
+        statusActions={
+          <>
+            <button
+              type="button"
+              onClick={handlePrevious}
+              disabled={currentTurnIndex < 0}
+              className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={currentTurnIndex >= replayLocalTurns.length - 1}
+              className="rounded-full bg-amber-700 px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next turn
+            </button>
+            <button
+              type="button"
+              onClick={handleAutoplayToggle}
+              disabled={
+                replayLocalTurns.length === 0 ||
+                currentTurnIndex >= replayLocalTurns.length - 1
+              }
+              className="rounded-full border border-amber-700 px-4 py-2 text-sm font-medium text-amber-800 transition disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {isAutoplaying ? "Stop autoplay" : "Start autoplay"}
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition"
+            >
+              Reset replay
+            </button>
+          </>
+        }
+      />
+
+      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <ReplayTranscriptInput
+          fixtures={replayFixtures}
+          activeFixtureId={activeFixture?.id ?? null}
+          replaySourceLabel={replaySource.label}
+          replaySourceDetail={replaySource.detail}
+          onAppend={handleAppendTurn}
+          onImport={handleImportTranscript}
+          onLoadFixture={handleLoadFixture}
+          onResetToSeededSession={handleResetToSeededSession}
+        />
         <div className="space-y-6">
-          <ReplayUpdatesPanel />
-          <ConversationMemoryPanel
-            currentTurn={currentSnapshot.currentTurn}
-            currentTurnMetadata={
-              currentSnapshot.currentTurn
-                ? (replayTurnMetadata[currentSnapshot.currentTurn.id] ?? null)
-                : null
-            }
-            organization={transcriptOrganization}
-            surfaceLabel="Replay analyzer"
-          />
           <ReplayValidationGuide
             activeFixture={activeFixture}
             replaySourceLabel={replaySource.label}

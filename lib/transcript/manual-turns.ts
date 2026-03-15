@@ -5,6 +5,13 @@ import {
 } from "@/lib/schemas/transcript";
 import {
   analyzeReplayCommittedTurn,
+  type ReplayAffectiveIntensity,
+  type ReplayCompletionReason,
+  type ReplayCompletionStatus,
+  type ReplayDominantEmotion,
+  type ReplayInterruptionReason,
+  type ReplayLexicalHit,
+  type ReplayValence,
   type ReplayTurnAnalysis,
 } from "@/lib/transcript/turn-analysis";
 import {
@@ -107,6 +114,91 @@ const replayCommittedTurnMetadataSchema = z.object({
     emotionalSignal: z.enum(["flat", "engaged", "heated"]),
     threadAction: z.enum(["none", "opens", "revisits", "linked", "deflects"]),
     cuePotential: z.enum(["low", "medium", "high"]),
+    affective: z.object({
+      dominantEmotion: z.enum([
+        "neutral",
+        "regret",
+        "fear",
+        "anger",
+        "sadness",
+        "defensiveness",
+      ] satisfies [ReplayDominantEmotion, ...ReplayDominantEmotion[]]),
+      intensity: z.enum([
+        "low",
+        "medium",
+        "high",
+      ] satisfies [ReplayAffectiveIntensity, ...ReplayAffectiveIntensity[]]),
+      valence: z.enum([
+        "negative",
+        "mixed",
+        "positive",
+        "neutral",
+      ] satisfies [ReplayValence, ...ReplayValence[]]),
+      triggerTerms: z.array(
+        z.object({
+          term: z.string().min(1),
+          tier: z.enum([
+            "emotion",
+            "stakes",
+            "intensifier",
+            "deflection",
+            "dossier_story",
+            "dossier_live_wire",
+            "dossier_contradiction",
+          ] satisfies [ReplayLexicalHit["tier"], ...ReplayLexicalHit["tier"][]]),
+          weight: z.number().min(0),
+          source: z.enum(["base", "dossier"]),
+        }),
+      ),
+    }),
+    completion: z.object({
+      completionStatus: z.enum([
+        "complete",
+        "incomplete",
+        "truncated",
+        "uncertain",
+      ] satisfies [ReplayCompletionStatus, ...ReplayCompletionStatus[]]),
+      reasons: z.array(
+        z.enum([
+          "endsWithConnector",
+          "danglingClause",
+          "explicitQuestionOpen",
+          "veryShortFragment",
+          "endsWithDash",
+          "endsWithEllipsis",
+          "noTerminalPunctuation",
+        ] satisfies [ReplayCompletionReason, ...ReplayCompletionReason[]]),
+      ),
+    }),
+    interruption: z.object({
+      interruptedPreviousTurn: z.boolean(),
+      previousTurnId: z.string().uuid().nullable(),
+      reason: z.enum([
+        "unfinishedSpeakerSwitch",
+        "rapidSpeakerSwitch",
+        "nonIncreasingTimestamp",
+        "none",
+      ] satisfies [ReplayInterruptionReason, ...ReplayInterruptionReason[]]),
+    }),
+    lexical: z.object({
+      hits: z.array(
+        z.object({
+          term: z.string().min(1),
+          tier: z.enum([
+            "emotion",
+            "stakes",
+            "intensifier",
+            "deflection",
+            "dossier_story",
+            "dossier_live_wire",
+            "dossier_contradiction",
+          ] satisfies [ReplayLexicalHit["tier"], ...ReplayLexicalHit["tier"][]]),
+          weight: z.number().min(0),
+          source: z.enum(["base", "dossier"]),
+        }),
+      ),
+      weightedScore: z.number().min(0),
+    }),
   }),
   memory: z.object({
     entities: z.array(z.string()),
@@ -173,8 +265,11 @@ function formatReplayValidationError(
 function buildReplaySourceMetadata(
   source: ReplayTurnInputSource,
   turn: TranscriptTurn,
+  previousTurn: TranscriptTurn | null,
 ): ReplayCommittedTurnMetadata {
-  const analysis = analyzeReplayCommittedTurn(turn);
+  const analysis = analyzeReplayCommittedTurn(turn, {
+    previousTurn,
+  });
 
   return {
     source,
@@ -249,7 +344,11 @@ export function appendReplayTranscriptTurns(
         sessionId,
         draft,
       );
-      const metadata = buildReplaySourceMetadata(draft.source, turn);
+      const metadata = buildReplaySourceMetadata(
+        draft.source,
+        turn,
+        currentResult.turns.at(-1) ?? null,
+      );
 
       return {
         turns: [...currentResult.turns, turn],
