@@ -10,6 +10,7 @@ import { ReplayListeningSandbox } from "@/components/live/replay-listening-sandb
 import { ReplayUpdatesPanel } from "@/components/live/replay-updates-panel";
 import { ThreadBank } from "@/components/live/thread-bank";
 import { TopicMap } from "@/components/live/topic-map";
+import { buildFreshReplayHandoff } from "@/lib/replay/fresh-workspace";
 import { transcriptTurnSchema } from "@/lib/schemas/transcript";
 import { buildInterviewSessionTimeline } from "@/lib/state/interview-session-timeline";
 import {
@@ -27,6 +28,7 @@ type InterviewReplayProps = {
   guestName: string;
   handoff: DossierLiveHandoff;
   transcriptTurns: TranscriptTurn[];
+  initialIsFreshInterview?: boolean;
 };
 
 const INITIAL_SNAPSHOT_INDEX = 0;
@@ -40,8 +42,6 @@ type ReplaySourceState = {
   label: string;
   detail: string;
 };
-
-const EMPTY_REPLAY_GUEST_ID = "00000000-0000-4000-8000-000000000001";
 
 function isReplaySourceState(value: unknown): value is ReplaySourceState {
   if (typeof value !== "object" || value === null) {
@@ -118,25 +118,13 @@ function buildNewInterviewSource(): ReplaySourceState {
   };
 }
 
-function buildFreshReplayHandoff(): DossierLiveHandoff {
-  return {
-    guestId: EMPTY_REPLAY_GUEST_ID,
-    title: "Fresh interview workspace",
-    activeStoryVeins: [],
-    liveWires: [],
-    contradictionCandidates: [],
-    followUpOpportunities: [],
-    openingPaths: [],
-    audienceHooks: [],
-  };
-}
-
 export function InterviewReplay({
   displaySessionId,
   engineSessionId,
   guestName,
   handoff,
   transcriptTurns,
+  initialIsFreshInterview = false,
 }: InterviewReplayProps) {
   void guestName;
   const searchParams = useSearchParams();
@@ -147,11 +135,14 @@ export function InterviewReplay({
   const [replayTurnMetadata, setReplayTurnMetadata] = useState<
     Record<string, ReplayCommittedTurnMetadata>
   >({});
-  const [isFreshInterview, setIsFreshInterview] = useState(false);
+  const [isFreshInterview, setIsFreshInterview] = useState(initialIsFreshInterview);
   const [currentSnapshotIndex, setCurrentSnapshotIndex] = useState(INITIAL_SNAPSHOT_INDEX);
   const [isAutoplaying, setIsAutoplaying] = useState(false);
   const [replaySource, setReplaySource] = useState<ReplaySourceState>(
-    buildSeededReplaySource,
+    () =>
+      initialIsFreshInterview
+        ? buildNewInterviewSource()
+        : buildSeededReplaySource(),
   );
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
@@ -204,6 +195,10 @@ export function InterviewReplay({
     .reverse();
 
   useEffect(() => {
+    if (searchParams.get("newInterview") === "1") {
+      return;
+    }
+
     const storedReplaySession = readStoredReplaySession(engineSessionId);
 
     if (!storedReplaySession) {
@@ -220,7 +215,7 @@ export function InterviewReplay({
         "Restored browser-local replay session. Review source and snapshot position before continuing.",
       );
     });
-  }, [engineSessionId]);
+  }, [engineSessionId, searchParams]);
 
   useEffect(() => {
     const shouldStartNewInterview = searchParams.get("newInterview") === "1";
@@ -510,25 +505,68 @@ export function InterviewReplay({
         <ReplayUpdatesPanel onClose={() => setIsUpdatesOpen(false)} />
       ) : null}
 
-      <ReplayListeningSandbox
-        engineSessionId={engineSessionId}
-        replaySourceLabel={replaySource.label}
-        lastCommittedTurn={replayLocalTurns.at(-1) ?? null}
-        onCommitDrafts={(drafts) => handleAppendDrafts(drafts, "sandbox commit")}
-      />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)] xl:items-start">
+        <ReplayListeningSandbox
+          engineSessionId={engineSessionId}
+          replaySourceLabel={replaySource.label}
+          lastCommittedTurn={replayLocalTurns.at(-1) ?? null}
+          onCommitDrafts={(drafts) => handleAppendDrafts(drafts, "sandbox commit")}
+        />
 
-      <ReplayCurrentTurn
-        snapshot={currentSnapshot}
-        currentTurnIndex={currentTurnIndex}
-        totalTurns={replayLocalTurns.length}
-        replaySourceLabel={replaySource.label}
-        turnMetadata={visibleReplayTurnMetadata}
-        isAutoplaying={isAutoplaying}
-        onNext={handleNext}
-        onPrevious={handlePrevious}
-        onReset={handleReset}
-        onAutoplayToggle={handleAutoplayToggle}
-      />
+        <div className="space-y-6 xl:sticky xl:top-6">
+          <ReplayCurrentTurn
+            snapshot={currentSnapshot}
+            currentTurnIndex={currentTurnIndex}
+            totalTurns={replayLocalTurns.length}
+            replaySourceLabel={replaySource.label}
+            turnMetadata={visibleReplayTurnMetadata}
+            isAutoplaying={isAutoplaying}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            onReset={handleReset}
+            onAutoplayToggle={handleAutoplayToggle}
+          />
+
+          <section className="panel p-6">
+            <div className="flex items-center justify-between gap-3">
+              <p className="eyebrow">Recall candidates</p>
+              <span className="rounded-full bg-stone-100 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-stone-700">
+                {transcriptOrganization.recallCandidates.length} visible
+              </span>
+            </div>
+            <div className="mt-4 space-y-3">
+              {transcriptOrganization.recallCandidates.length > 0 ? (
+                transcriptOrganization.recallCandidates.slice(0, 4).map((candidate) => (
+                  <article
+                    key={candidate.id}
+                    className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-medium text-stone-900">
+                        {candidate.label}
+                      </p>
+                      <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] uppercase tracking-[0.14em] text-amber-900">
+                        {candidate.readiness.replaceAll("_", " ")}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                      {candidate.sourceKind.replaceAll("_", " ")} | {candidate.recency} | debt{" "}
+                      {candidate.completionDebtScore}
+                    </p>
+                    <p className="mt-2 text-xs leading-5 text-stone-600">
+                      {candidate.reason}
+                    </p>
+                  </article>
+                ))
+              ) : (
+                <p className="text-sm text-stone-600">
+                  No recall candidates are ready yet.
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
         <ThreadBank
@@ -551,49 +589,13 @@ export function InterviewReplay({
         />
       </div>
 
-      <section className="panel p-6">
-        <p className="eyebrow">Recall candidates</p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {transcriptOrganization.recallCandidates.length > 0 ? (
-            transcriptOrganization.recallCandidates.slice(0, 4).map((candidate) => (
-              <article
-                key={candidate.id}
-                className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-medium text-stone-900">
-                    {candidate.label}
-                  </p>
-                  <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] uppercase tracking-[0.14em] text-amber-900">
-                    {candidate.readiness.replaceAll("_", " ")}
-                  </span>
-                </div>
-                <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-stone-500">
-                  {candidate.sourceKind.replaceAll("_", " ")} | {candidate.recency} | debt{" "}
-                  {candidate.completionDebtScore}
-                </p>
-                <p className="mt-2 text-xs leading-5 text-stone-600">
-                  {candidate.reason}
-                </p>
-              </article>
-            ))
-          ) : (
-            <p className="text-sm text-stone-600">
-              No recall candidates are ready yet.
-            </p>
-          )}
-        </div>
-      </section>
-
-      <div className="grid gap-6">
-        <TopicMap
-          sessionId={displaySessionId}
-          coveredVeins={currentSnapshot.conversationState.coveredVeins}
-          storyVeinProgress={currentSnapshot.storyVeinProgress}
-          emotionalHeat={currentSnapshot.conversationState.emotionalHeat}
-          closureConfidence={currentSnapshot.conversationState.closureConfidence}
-        />
-      </div>
+      <TopicMap
+        sessionId={displaySessionId}
+        coveredVeins={currentSnapshot.conversationState.coveredVeins}
+        storyVeinProgress={currentSnapshot.storyVeinProgress}
+        emotionalHeat={currentSnapshot.conversationState.emotionalHeat}
+        closureConfidence={currentSnapshot.conversationState.closureConfidence}
+      />
     </div>
   );
 }

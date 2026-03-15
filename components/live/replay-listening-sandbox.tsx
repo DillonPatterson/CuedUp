@@ -727,7 +727,7 @@ export function ReplayListeningSandbox({
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-3 md:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="rounded-2xl border border-stone-200 bg-white/80 p-4">
           <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
             Session state
@@ -827,7 +827,7 @@ export function ReplayListeningSandbox({
               ) : null}
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
                 <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
                   Themes
