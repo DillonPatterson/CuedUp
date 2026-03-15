@@ -4,6 +4,7 @@ import {
   importReplayTranscriptTurns,
   type ReplayTranscriptTurnDraft,
 } from "@/lib/transcript/manual-turns";
+import { buildReplayTranscriptOrganization } from "@/lib/transcript/organization/build-session-organization";
 
 const SESSION_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -21,6 +22,17 @@ function buildDraft(
     noveltyScore: 0.5,
     threadIdLink: null,
   };
+}
+
+function buildOrganizationForDraft(
+  draft: ReplayTranscriptTurnDraft,
+) {
+  const replayAppendResult = appendReplayTranscriptTurns([], SESSION_ID, [draft]);
+
+  return buildReplayTranscriptOrganization(
+    replayAppendResult.turns,
+    replayAppendResult.metadata,
+  );
 }
 
 let result = appendReplayTranscriptTurns([], SESSION_ID, [
@@ -72,6 +84,26 @@ assert.ok(
   !("memory" in result.turns[0]!),
   "TranscriptTurn shape should remain engine-facing and memory-free.",
 );
+const firstTurnOrganization = buildReplayTranscriptOrganization(
+  result.turns,
+  result.metadata,
+);
+assert.deepEqual(
+  firstTurnOrganization.annotationsByTurnId[result.turns[0]!.id]?.map(
+    (annotation) => ({
+      kind: annotation.kind,
+      label: annotation.label,
+      salience: annotation.salience,
+    }),
+  ),
+  [
+    {
+      kind: "claim",
+      label: "first manual turn",
+      salience: "low",
+    },
+  ],
+);
 
 const crossSourceText = "My brother made risk feel personal.";
 const crossSourceResult = appendReplayTranscriptTurns([], SESSION_ID, [
@@ -94,6 +126,69 @@ assert.equal(manualMemory?.salience, "medium");
 assert.deepEqual(manualMemory?.entities, ["Brother"]);
 assert.deepEqual(manualMemory?.themes, ["risk", "family", "emotion"]);
 assert.deepEqual(manualMemory?.claims, [crossSourceText]);
+
+const manualOrganization = buildOrganizationForDraft(
+  buildDraft("manual_replay_input", crossSourceText),
+);
+const sandboxDraftOrganization = buildOrganizationForDraft(
+  buildDraft("listening_sandbox_draft", crossSourceText),
+);
+const sandboxSegmentOrganization = buildOrganizationForDraft(
+  buildDraft("listening_sandbox_segment", crossSourceText),
+);
+
+assert.deepEqual(sandboxDraftOrganization, manualOrganization);
+assert.deepEqual(sandboxSegmentOrganization, manualOrganization);
+assert.deepEqual(manualOrganization.summary, {
+  entities: ["Brother"],
+  themes: ["risk", "family", "emotion"],
+  claims: [crossSourceText],
+  unresolvedThreadCues: [],
+  tensions: [],
+});
+assert.deepEqual(
+  manualOrganization.annotations.map((annotation) => annotation.kind),
+  ["entity", "theme", "theme", "theme", "claim"],
+);
+assert.deepEqual(
+  manualOrganization.retrievalRecords.map((record) => ({
+    itemKind: record.itemKind,
+    annotationKind: record.annotationKind,
+    lookupText: record.lookupText,
+  })),
+  [
+    {
+      itemKind: "turn",
+      annotationKind: null,
+      lookupText: crossSourceText,
+    },
+    {
+      itemKind: "annotation",
+      annotationKind: "entity",
+      lookupText: "Brother",
+    },
+    {
+      itemKind: "annotation",
+      annotationKind: "theme",
+      lookupText: "risk",
+    },
+    {
+      itemKind: "annotation",
+      annotationKind: "theme",
+      lookupText: "family",
+    },
+    {
+      itemKind: "annotation",
+      annotationKind: "theme",
+      lookupText: "emotion",
+    },
+    {
+      itemKind: "annotation",
+      annotationKind: "claim",
+      lookupText: crossSourceText,
+    },
+  ],
+);
 
 result = importReplayTranscriptTurns(result.turns, SESSION_ID, JSON.stringify([
   {

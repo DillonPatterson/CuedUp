@@ -27,6 +27,7 @@ import {
   type ReplayTranscriptTurnDraft,
   type ReplayCommittedTurnMetadata,
 } from "@/lib/transcript/manual-turns";
+import { buildReplayTranscriptOrganization } from "@/lib/transcript/organization/build-session-organization";
 import {
   buildInitialProofSession,
   buildProofCompactSummary,
@@ -161,6 +162,14 @@ export function InterviewReplay({
         replayLocalTurns,
       ),
     [engineSessionId, handoff, replayLocalTurns],
+  );
+  const transcriptOrganization = useMemo(
+    () =>
+      buildReplayTranscriptOrganization(
+        replayLocalTurns,
+        replayTurnMetadata,
+      ),
+    [replayLocalTurns, replayTurnMetadata],
   );
   const [currentSnapshotIndex, setCurrentSnapshotIndex] = useState(INITIAL_SNAPSHOT_INDEX);
   const [isAutoplaying, setIsAutoplaying] = useState(false);
@@ -659,6 +668,7 @@ export function InterviewReplay({
             replaySourceLabel={replaySource.label}
             checkpointFocusLabel={checkpointFocusLabel}
             turnMetadata={replayTurnMetadata}
+            organization={transcriptOrganization}
             onNext={handleNext}
             onPrevious={handlePrevious}
             onReset={handleReset}
