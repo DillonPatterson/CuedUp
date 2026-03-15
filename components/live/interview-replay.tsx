@@ -7,6 +7,7 @@ import { PresenceDecisionLog } from "@/components/live/presence-decision-log";
 import { ReplayListeningSandbox } from "@/components/live/replay-listening-sandbox";
 import { ReplayProofSummary } from "@/components/live/replay-proof-summary";
 import { ReplayTranscriptInput } from "@/components/live/replay-transcript-input";
+import { ReplayUpdatesPanel } from "@/components/live/replay-updates-panel";
 import { ReplayValidationGuide } from "@/components/live/replay-validation-guide";
 import { ThreadBank } from "@/components/live/thread-bank";
 import { TopicMap } from "@/components/live/topic-map";
@@ -677,6 +678,7 @@ export function InterviewReplay({
         </div>
 
         <div className="space-y-6">
+          <ReplayUpdatesPanel />
           <ReplayValidationGuide
             activeFixture={activeFixture}
             replaySourceLabel={replaySource.label}
