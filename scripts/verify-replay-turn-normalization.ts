@@ -33,20 +33,32 @@ let result = appendReplayTranscriptTurns([], SESSION_ID, [
 assert.equal(result.turns.length, 4);
 assert.equal(result.turns[0]?.text, "first manual turn");
 assert.equal(
-  result.sourceMetadata[result.turns[0]!.id]?.source,
+  result.metadata[result.turns[0]!.id]?.source,
   "manual_replay_input",
 );
 assert.equal(
-  result.sourceMetadata[result.turns[1]!.id]?.source,
+  result.metadata[result.turns[1]!.id]?.source,
   "listening_sandbox_draft",
 );
 assert.equal(
-  result.sourceMetadata[result.turns[2]!.id]?.source,
+  result.metadata[result.turns[2]!.id]?.source,
   "listening_sandbox_segment",
 );
 assert.equal(
-  result.sourceMetadata[result.turns[3]!.id]?.source,
+  result.metadata[result.turns[3]!.id]?.source,
   "future_live_ingestion",
+);
+assert.equal(
+  result.metadata[result.turns[0]!.id]?.analysis.turnKind,
+  "answer",
+);
+assert.equal(
+  result.metadata[result.turns[0]!.id]?.analysis.specificityBand,
+  "medium",
+);
+assert.equal(
+  result.metadata[result.turns[0]!.id]?.analysis.cuePotential,
+  "medium",
 );
 
 result = importReplayTranscriptTurns(result.turns, SESSION_ID, JSON.stringify([
@@ -61,8 +73,16 @@ assert.ok(importedTurn);
 assert.equal(importedTurn?.speaker, "guest");
 assert.equal(importedTurn?.energyScore, 0.5);
 assert.equal(
-  result.sourceMetadata[importedTurn!.id]?.source,
+  result.metadata[importedTurn!.id]?.source,
   "json_import",
+);
+assert.equal(
+  result.metadata[importedTurn!.id]?.analysis.turnKind,
+  "answer",
+);
+assert.equal(
+  result.metadata[importedTurn!.id]?.analysis.threadAction,
+  "none",
 );
 
 assert.throws(

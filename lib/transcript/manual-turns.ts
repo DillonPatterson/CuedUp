@@ -3,6 +3,10 @@ import {
   transcriptTurnInputSchema,
   transcriptTurnSchema,
 } from "@/lib/schemas/transcript";
+import {
+  analyzeReplayCommittedTurn,
+  type ReplayTurnAnalysis,
+} from "@/lib/transcript/turn-analysis";
 import type { TranscriptTurn, TranscriptTurnInput } from "@/types";
 
 export const replayTurnSourceSchema = z.enum([
@@ -26,15 +30,16 @@ export type ReplayTranscriptTurnDraft = Omit<
 
 export type ManualTranscriptTurnDraft = Omit<ReplayTranscriptTurnDraft, "source">;
 
-export type ReplayTurnSourceMetadata = {
+export type ReplayCommittedTurnMetadata = {
   source: ReplayTurnInputSource;
   label: string;
+  analysis: ReplayTurnAnalysis;
 };
 
 export type ReplayAppendResult = {
   turns: TranscriptTurn[];
   appendedTurns: TranscriptTurn[];
-  sourceMetadata: Record<string, ReplayTurnSourceMetadata>;
+  metadata: Record<string, ReplayCommittedTurnMetadata>;
 };
 
 const MANUAL_TURN_STEP_MS = 15_000;
@@ -82,9 +87,22 @@ const replayTranscriptTurnDraftSchema = z.object({
   threadIdLink: z.string().uuid().nullable().optional().default(null),
 });
 
-const replayTurnSourceMetadataSchema = z.object({
+const replayCommittedTurnMetadataSchema = z.object({
   source: replayTurnSourceSchema,
   label: z.string().min(1),
+  analysis: z.object({
+    turnKind: z.enum([
+      "question",
+      "answer",
+      "producer_note",
+      "system_note",
+      "statement",
+    ]),
+    specificityBand: z.enum(["low", "medium", "high"]),
+    emotionalSignal: z.enum(["flat", "engaged", "heated"]),
+    threadAction: z.enum(["none", "opens", "revisits", "linked", "deflects"]),
+    cuePotential: z.enum(["low", "medium", "high"]),
+  }),
 });
 
 const replayImportedTurnSchema = replayTranscriptTurnDraftSchema.omit({
@@ -92,9 +110,9 @@ const replayImportedTurnSchema = replayTranscriptTurnDraftSchema.omit({
 });
 
 const replayImportedTranscriptSchema = z.array(replayImportedTurnSchema);
-const replayTurnSourceMetadataRecordSchema = z.record(
+const replayCommittedTurnMetadataRecordSchema = z.record(
   z.string(),
-  replayTurnSourceMetadataSchema,
+  replayCommittedTurnMetadataSchema,
 );
 
 function countManualTurns(turns: TranscriptTurn[]) {
@@ -133,10 +151,12 @@ function formatReplayValidationError(
 
 function buildReplaySourceMetadata(
   source: ReplayTurnInputSource,
-): ReplayTurnSourceMetadata {
+  turn: TranscriptTurn,
+): ReplayCommittedTurnMetadata {
   return {
     source,
     label: replayTurnSourceLabels[source],
+    analysis: analyzeReplayCommittedTurn(turn),
   };
 }
 
@@ -183,13 +203,12 @@ function buildTranscriptTurnFromReplayDraft(
       ...input,
       id: buildManualTurnId(nextManualTurnCount),
     }),
-    metadata: buildReplaySourceMetadata(normalizedDraft.source),
   };
 }
 
-export function parseReplayTurnSourceMetadataRecord(value: unknown) {
+export function parseReplayCommittedTurnMetadataRecord(value: unknown) {
   const parsedMetadata =
-    replayTurnSourceMetadataRecordSchema.safeParse(value);
+    replayCommittedTurnMetadataRecordSchema.safeParse(value);
 
   return parsedMetadata.success ? parsedMetadata.data : {};
 }
@@ -201,17 +220,18 @@ export function appendReplayTranscriptTurns(
 ): ReplayAppendResult {
   return drafts.reduce<ReplayAppendResult>(
     (currentResult, draft) => {
-      const { turn, metadata } = buildTranscriptTurnFromReplayDraft(
+      const { turn } = buildTranscriptTurnFromReplayDraft(
         currentResult.turns,
         sessionId,
         draft,
       );
+      const metadata = buildReplaySourceMetadata(draft.source, turn);
 
       return {
         turns: [...currentResult.turns, turn],
         appendedTurns: [...currentResult.appendedTurns, turn],
-        sourceMetadata: {
-          ...currentResult.sourceMetadata,
+        metadata: {
+          ...currentResult.metadata,
           [turn.id]: metadata,
         },
       };
@@ -219,7 +239,7 @@ export function appendReplayTranscriptTurns(
     {
       turns,
       appendedTurns: [],
-      sourceMetadata: {},
+      metadata: {},
     },
   );
 }

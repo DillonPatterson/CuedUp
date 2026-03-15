@@ -22,9 +22,9 @@ import {
   appendReplayTranscriptTurns,
   importReplayTranscriptTurnDrafts,
   importReplayTranscriptTurns,
-  parseReplayTurnSourceMetadataRecord,
+  parseReplayCommittedTurnMetadataRecord,
   type ReplayTranscriptTurnDraft,
-  type ReplayTurnSourceMetadata,
+  type ReplayCommittedTurnMetadata,
 } from "@/lib/transcript/manual-turns";
 import {
   buildInitialProofSession,
@@ -95,6 +95,7 @@ function readStoredReplaySession(engineSessionId: string) {
       currentSnapshotIndex?: unknown;
       replaySource?: unknown;
       selectedCheckpointId?: unknown;
+      turnMetadata?: unknown;
       turnSources?: unknown;
     };
     const parsedTurns = transcriptTurnSchema.array().safeParse(parsed.turns);
@@ -117,7 +118,11 @@ function readStoredReplaySession(engineSessionId: string) {
         typeof parsed.selectedCheckpointId === "string"
           ? parsed.selectedCheckpointId
           : null,
-      turnSources: parseReplayTurnSourceMetadataRecord(parsed.turnSources),
+      turnMetadata: parseReplayCommittedTurnMetadataRecord(
+        typeof parsed.turnMetadata !== "undefined"
+          ? parsed.turnMetadata
+          : parsed.turnSources,
+      ),
     };
   } catch {
     return null;
@@ -144,8 +149,8 @@ export function InterviewReplay({
   // Replay owns an ephemeral local copy of turns so manual appends stay dev-only
   // and do not pretend to be canonical persisted session truth.
   const [replayLocalTurns, setReplayLocalTurns] = useState(transcriptTurns);
-  const [replayTurnSources, setReplayTurnSources] = useState<
-    Record<string, ReplayTurnSourceMetadata>
+  const [replayTurnMetadata, setReplayTurnMetadata] = useState<
+    Record<string, ReplayCommittedTurnMetadata>
   >({});
   const timeline = useMemo(
     () =>
@@ -226,7 +231,7 @@ export function InterviewReplay({
 
     startTransition(() => {
       setReplayLocalTurns(storedReplaySession.turns);
-      setReplayTurnSources(storedReplaySession.turnSources);
+      setReplayTurnMetadata(storedReplaySession.turnMetadata);
       setCurrentSnapshotIndex(storedReplaySession.currentSnapshotIndex);
       setReplaySource(storedReplaySession.replaySource);
       setSelectedCheckpointId(storedReplaySession.selectedCheckpointId);
@@ -271,7 +276,7 @@ export function InterviewReplay({
         replaySessionStorageKey(engineSessionId),
         JSON.stringify({
           turns: replayLocalTurns,
-          turnSources: replayTurnSources,
+          turnMetadata: replayTurnMetadata,
           currentSnapshotIndex,
           replaySource,
           selectedCheckpointId,
@@ -284,7 +289,7 @@ export function InterviewReplay({
     currentSnapshotIndex,
     engineSessionId,
     replayLocalTurns,
-    replayTurnSources,
+    replayTurnMetadata,
     replaySource,
     selectedCheckpointId,
   ]);
@@ -333,15 +338,15 @@ export function InterviewReplay({
     nextSnapshotIndex: number,
     nextReplaySource?: ReplaySourceState,
     nextSelectedCheckpointId?: string | null,
-    nextReplayTurnSources?: Record<string, ReplayTurnSourceMetadata>,
+    nextReplayTurnMetadata?: Record<string, ReplayCommittedTurnMetadata>,
   ) {
     startTransition(() => {
       // Replacing replay-local turns intentionally discards prior replay-only
       // fixture/import/manual state so the timeline and guard output rebuild
       // from one canonical local stream only.
       setReplayLocalTurns(nextTurns);
-      if (nextReplayTurnSources) {
-        setReplayTurnSources(nextReplayTurnSources);
+      if (nextReplayTurnMetadata) {
+        setReplayTurnMetadata(nextReplayTurnMetadata);
       }
       setCurrentSnapshotIndex(nextSnapshotIndex);
       setIsAutoplaying(false);
@@ -431,8 +436,8 @@ export function InterviewReplay({
       buildReplaySourceAfterAppend(source),
       undefined,
       {
-        ...replayTurnSources,
-        ...appendResult.sourceMetadata,
+        ...replayTurnMetadata,
+        ...appendResult.metadata,
       },
     );
   }
@@ -450,8 +455,8 @@ export function InterviewReplay({
       buildReplaySourceAfterAppend("JSON import"),
       undefined,
       {
-        ...replayTurnSources,
-        ...appendResult.sourceMetadata,
+        ...replayTurnMetadata,
+        ...appendResult.metadata,
       },
     );
   }
@@ -478,7 +483,7 @@ export function InterviewReplay({
       appendResult.turns.length,
       buildFixtureReplaySource(fixture),
       fixture.checkpoints[0]?.id ?? null,
-      appendResult.sourceMetadata,
+      appendResult.metadata,
     );
   }
 
@@ -652,7 +657,7 @@ export function InterviewReplay({
             totalTurns={replayLocalTurns.length}
             replaySourceLabel={replaySource.label}
             checkpointFocusLabel={checkpointFocusLabel}
-            turnSources={replayTurnSources}
+            turnMetadata={replayTurnMetadata}
             onNext={handleNext}
             onPrevious={handlePrevious}
             onReset={handleReset}

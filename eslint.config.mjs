@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local browser profile artifacts used for manual testing.
+    ".codex-chrome/**",
+    ".codex-dev-*.log",
   ]),
 ]);
 

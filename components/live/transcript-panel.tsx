@@ -1,5 +1,5 @@
 import type { TranscriptTurn } from "@/types";
-import type { ReplayTurnSourceMetadata } from "@/lib/transcript/manual-turns";
+import type { ReplayCommittedTurnMetadata } from "@/lib/transcript/manual-turns";
 
 type TranscriptPanelProps = {
   sessionId: string;
@@ -11,7 +11,7 @@ type TranscriptPanelProps = {
   totalTurns: number;
   replaySourceLabel: string;
   checkpointFocusLabel: string | null;
-  turnSources: Record<string, ReplayTurnSourceMetadata>;
+  turnMetadata: Record<string, ReplayCommittedTurnMetadata>;
   isAutoplaying: boolean;
   onNext: () => void;
   onPrevious: () => void;
@@ -21,6 +21,10 @@ type TranscriptPanelProps = {
 
 function speakerLabel(speaker: TranscriptTurn["speaker"]) {
   return speaker.charAt(0).toUpperCase() + speaker.slice(1);
+}
+
+function formatLabel(value: string) {
+  return value.replaceAll("_", " ");
 }
 
 export function TranscriptPanel({
@@ -33,7 +37,7 @@ export function TranscriptPanel({
   totalTurns,
   replaySourceLabel,
   checkpointFocusLabel,
-  turnSources,
+  turnMetadata,
   isAutoplaying,
   onNext,
   onPrevious,
@@ -41,8 +45,8 @@ export function TranscriptPanel({
   onAutoplayToggle,
 }: TranscriptPanelProps) {
   const isSeedSnapshot = currentSnapshotIndex === 0;
-  const currentTurnSourceLabel = currentTurn
-    ? (turnSources[currentTurn.id]?.label ?? "Seeded or fixture transcript")
+  const currentTurnMetadata = currentTurn
+    ? (turnMetadata[currentTurn.id] ?? null)
     : null;
 
   return (
@@ -124,7 +128,9 @@ export function TranscriptPanel({
                 {speakerLabel(currentTurn.speaker)}
               </span>
               <span>{currentTurn.timestamp}</span>
-              <span>Input {currentTurnSourceLabel}</span>
+              <span>
+                Input {currentTurnMetadata?.label ?? "Seeded or fixture transcript"}
+              </span>
               <span>Replay {replaySourceLabel}</span>
               <span>Energy {currentTurn.energyScore.toFixed(2)}</span>
               <span>Specificity {currentTurn.specificityScore.toFixed(2)}</span>
@@ -132,6 +138,25 @@ export function TranscriptPanel({
             <p className="mt-4 text-2xl leading-9 text-stone-50">
               {currentTurn.text}
             </p>
+            {currentTurnMetadata ? (
+              <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.14em] text-stone-300">
+                <span className="rounded-full bg-stone-800 px-3 py-1">
+                  {formatLabel(currentTurnMetadata.analysis.turnKind)}
+                </span>
+                <span className="rounded-full bg-stone-800 px-3 py-1">
+                  Specificity {currentTurnMetadata.analysis.specificityBand}
+                </span>
+                <span className="rounded-full bg-stone-800 px-3 py-1">
+                  Emotion {currentTurnMetadata.analysis.emotionalSignal}
+                </span>
+                <span className="rounded-full bg-stone-800 px-3 py-1">
+                  Thread {formatLabel(currentTurnMetadata.analysis.threadAction)}
+                </span>
+                <span className="rounded-full bg-stone-800 px-3 py-1">
+                  Cue {currentTurnMetadata.analysis.cuePotential}
+                </span>
+              </div>
+            ) : null}
           </>
         ) : (
           <p className="mt-4 text-lg leading-8 text-stone-200">
@@ -160,7 +185,15 @@ export function TranscriptPanel({
                   <span>{speakerLabel(turn.speaker)}</span>
                   <span>{turn.timestamp}</span>
                   <span>
-                    {turnSources[turn.id]?.label ?? "Seeded or fixture transcript"}
+                    {turnMetadata[turn.id]?.label ?? "Seeded or fixture transcript"}
+                  </span>
+                  <span>
+                    {formatLabel(
+                      turnMetadata[turn.id]?.analysis.turnKind ?? "statement",
+                    )}
+                  </span>
+                  <span>
+                    Cue {turnMetadata[turn.id]?.analysis.cuePotential ?? "n/a"}
                   </span>
                   {currentTurn?.id === turn.id ? <span>Current snapshot</span> : null}
                 </div>
