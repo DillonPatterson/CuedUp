@@ -1,5 +1,4 @@
 import type { TranscriptTurn } from "@/types";
-import { buildWholeTurnSpanRef } from "@/lib/transcript/organization/span-ref";
 import type {
   TranscriptDerivedAnnotation,
   TranscriptDerivedAnnotationKind,
@@ -49,8 +48,6 @@ export function buildAnnotationsFromReplayMetadata(
     return [];
   }
 
-  const spanRef = buildWholeTurnSpanRef(turn);
-
   return annotationMappings.flatMap(({ field, kind }) =>
     metadata.memory[field].map((label) => ({
       id: buildAnnotationId(turn.id, kind, label),
@@ -60,7 +57,6 @@ export function buildAnnotationsFromReplayMetadata(
       label,
       salience: metadata.memory.salience,
       provenance: "replay_metadata" as const,
-      spanRefs: [spanRef],
     })),
   );
 }

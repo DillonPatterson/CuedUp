@@ -14,12 +14,6 @@ export type TranscriptDerivedAnnotationKind =
 
 export type TranscriptOrganizationSalience = "low" | "medium" | "high";
 
-export interface TranscriptSpanRef {
-  sessionId: string;
-  turnId: string;
-  scope: "turn";
-}
-
 export interface TranscriptDerivedAnnotation {
   id: string;
   sessionId: string;
@@ -28,7 +22,6 @@ export interface TranscriptDerivedAnnotation {
   label: string;
   salience: TranscriptOrganizationSalience;
   provenance: "replay_metadata";
-  spanRefs: TranscriptSpanRef[];
 }
 
 export interface TranscriptOrganizationSourceMetadata {
