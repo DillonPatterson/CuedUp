@@ -60,6 +60,40 @@ assert.equal(
   result.metadata[result.turns[0]!.id]?.analysis.cuePotential,
   "medium",
 );
+assert.equal(
+  result.metadata[result.turns[0]!.id]?.memory.memoryKind,
+  "fact",
+);
+assert.deepEqual(
+  result.metadata[result.turns[0]!.id]?.memory.entities,
+  [],
+);
+assert.ok(
+  !("memory" in result.turns[0]!),
+  "TranscriptTurn shape should remain engine-facing and memory-free.",
+);
+
+const crossSourceText = "My brother made risk feel personal.";
+const crossSourceResult = appendReplayTranscriptTurns([], SESSION_ID, [
+  buildDraft("manual_replay_input", crossSourceText),
+  buildDraft("listening_sandbox_draft", crossSourceText),
+  buildDraft("listening_sandbox_segment", crossSourceText),
+]);
+
+const manualMemory =
+  crossSourceResult.metadata[crossSourceResult.turns[0]!.id]?.memory;
+const sandboxDraftMemory =
+  crossSourceResult.metadata[crossSourceResult.turns[1]!.id]?.memory;
+const sandboxSegmentMemory =
+  crossSourceResult.metadata[crossSourceResult.turns[2]!.id]?.memory;
+
+assert.deepEqual(sandboxDraftMemory, manualMemory);
+assert.deepEqual(sandboxSegmentMemory, manualMemory);
+assert.equal(manualMemory?.memoryKind, "relationship");
+assert.equal(manualMemory?.salience, "medium");
+assert.deepEqual(manualMemory?.entities, ["Brother"]);
+assert.deepEqual(manualMemory?.themes, ["risk", "family", "emotion"]);
+assert.deepEqual(manualMemory?.claims, [crossSourceText]);
 
 result = importReplayTranscriptTurns(result.turns, SESSION_ID, JSON.stringify([
   {
@@ -83,6 +117,18 @@ assert.equal(
 assert.equal(
   result.metadata[importedTurn!.id]?.analysis.threadAction,
   "none",
+);
+assert.equal(
+  result.metadata[importedTurn!.id]?.memory.memoryKind,
+  "fact",
+);
+assert.equal(
+  result.metadata[importedTurn!.id]?.memory.salience,
+  "low",
+);
+assert.deepEqual(
+  result.metadata[importedTurn!.id]?.memory.contradictionSignals,
+  [],
 );
 
 assert.throws(

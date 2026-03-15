@@ -7,6 +7,10 @@ import {
   analyzeReplayCommittedTurn,
   type ReplayTurnAnalysis,
 } from "@/lib/transcript/turn-analysis";
+import {
+  extractReplayTurnMemory,
+  type ReplayTurnMemory,
+} from "@/lib/transcript/turn-memory";
 import type { TranscriptTurn, TranscriptTurnInput } from "@/types";
 
 export const replayTurnSourceSchema = z.enum([
@@ -34,6 +38,7 @@ export type ReplayCommittedTurnMetadata = {
   source: ReplayTurnInputSource;
   label: string;
   analysis: ReplayTurnAnalysis;
+  memory: ReplayTurnMemory;
 };
 
 export type ReplayAppendResult = {
@@ -103,6 +108,22 @@ const replayCommittedTurnMetadataSchema = z.object({
     threadAction: z.enum(["none", "opens", "revisits", "linked", "deflects"]),
     cuePotential: z.enum(["low", "medium", "high"]),
   }),
+  memory: z.object({
+    entities: z.array(z.string()),
+    themes: z.array(z.string()),
+    claims: z.array(z.string()),
+    contradictionSignals: z.array(z.string()),
+    unresolvedThreadCues: z.array(z.string()),
+    salience: z.enum(["low", "medium", "high"]),
+    memoryKind: z.enum([
+      "fact",
+      "emotion",
+      "relationship",
+      "risk",
+      "identity",
+      "none",
+    ]),
+  }),
 });
 
 const replayImportedTurnSchema = replayTranscriptTurnDraftSchema.omit({
@@ -153,10 +174,13 @@ function buildReplaySourceMetadata(
   source: ReplayTurnInputSource,
   turn: TranscriptTurn,
 ): ReplayCommittedTurnMetadata {
+  const analysis = analyzeReplayCommittedTurn(turn);
+
   return {
     source,
     label: replayTurnSourceLabels[source],
-    analysis: analyzeReplayCommittedTurn(turn),
+    analysis,
+    memory: extractReplayTurnMemory(turn, analysis),
   };
 }
 

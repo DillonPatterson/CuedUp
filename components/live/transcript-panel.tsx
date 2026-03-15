@@ -27,6 +27,10 @@ function formatLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function formatMemoryList(values: string[]) {
+  return values.join(", ");
+}
+
 export function TranscriptPanel({
   sessionId,
   guestName,
@@ -139,23 +143,60 @@ export function TranscriptPanel({
               {currentTurn.text}
             </p>
             {currentTurnMetadata ? (
-              <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.14em] text-stone-300">
-                <span className="rounded-full bg-stone-800 px-3 py-1">
-                  {formatLabel(currentTurnMetadata.analysis.turnKind)}
-                </span>
-                <span className="rounded-full bg-stone-800 px-3 py-1">
-                  Specificity {currentTurnMetadata.analysis.specificityBand}
-                </span>
-                <span className="rounded-full bg-stone-800 px-3 py-1">
-                  Emotion {currentTurnMetadata.analysis.emotionalSignal}
-                </span>
-                <span className="rounded-full bg-stone-800 px-3 py-1">
-                  Thread {formatLabel(currentTurnMetadata.analysis.threadAction)}
-                </span>
-                <span className="rounded-full bg-stone-800 px-3 py-1">
-                  Cue {currentTurnMetadata.analysis.cuePotential}
-                </span>
-              </div>
+              <>
+                <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.14em] text-stone-300">
+                  <span className="rounded-full bg-stone-800 px-3 py-1">
+                    {formatLabel(currentTurnMetadata.analysis.turnKind)}
+                  </span>
+                  <span className="rounded-full bg-stone-800 px-3 py-1">
+                    Specificity {currentTurnMetadata.analysis.specificityBand}
+                  </span>
+                  <span className="rounded-full bg-stone-800 px-3 py-1">
+                    Emotion {currentTurnMetadata.analysis.emotionalSignal}
+                  </span>
+                  <span className="rounded-full bg-stone-800 px-3 py-1">
+                    Thread {formatLabel(currentTurnMetadata.analysis.threadAction)}
+                  </span>
+                  <span className="rounded-full bg-stone-800 px-3 py-1">
+                    Cue {currentTurnMetadata.analysis.cuePotential}
+                  </span>
+                </div>
+                <div className="mt-3 rounded-2xl border border-stone-800 bg-stone-900/80 px-4 py-3 text-xs leading-6 text-stone-300">
+                  <p className="uppercase tracking-[0.16em] text-amber-300">
+                    Replay memory
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2 uppercase tracking-[0.14em]">
+                    <span className="rounded-full bg-stone-800 px-3 py-1">
+                      Kind {formatLabel(currentTurnMetadata.memory.memoryKind)}
+                    </span>
+                    <span className="rounded-full bg-stone-800 px-3 py-1">
+                      Salience {currentTurnMetadata.memory.salience}
+                    </span>
+                  </div>
+                  {currentTurnMetadata.memory.entities.length > 0 ? (
+                    <p className="mt-2">
+                      Entities: {formatMemoryList(currentTurnMetadata.memory.entities)}
+                    </p>
+                  ) : null}
+                  {currentTurnMetadata.memory.themes.length > 0 ? (
+                    <p className="mt-1">
+                      Themes: {formatMemoryList(currentTurnMetadata.memory.themes)}
+                    </p>
+                  ) : null}
+                  {currentTurnMetadata.memory.contradictionSignals.length > 0 ? (
+                    <p className="mt-1">
+                      Contradiction signals:{" "}
+                      {formatMemoryList(currentTurnMetadata.memory.contradictionSignals)}
+                    </p>
+                  ) : null}
+                  {currentTurnMetadata.memory.unresolvedThreadCues.length > 0 ? (
+                    <p className="mt-1">
+                      Thread cues:{" "}
+                      {formatMemoryList(currentTurnMetadata.memory.unresolvedThreadCues)}
+                    </p>
+                  ) : null}
+                </div>
+              </>
             ) : null}
           </>
         ) : (
@@ -194,6 +235,14 @@ export function TranscriptPanel({
                   </span>
                   <span>
                     Cue {turnMetadata[turn.id]?.analysis.cuePotential ?? "n/a"}
+                  </span>
+                  <span>
+                    Memory {formatLabel(
+                      turnMetadata[turn.id]?.memory.memoryKind ?? "none",
+                    )}
+                  </span>
+                  <span>
+                    Salience {turnMetadata[turn.id]?.memory.salience ?? "low"}
                   </span>
                   {currentTurn?.id === turn.id ? <span>Current snapshot</span> : null}
                 </div>
