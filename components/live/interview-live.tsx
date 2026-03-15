@@ -1,6 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import type { DossierLiveHandoff, TranscriptTurn } from "@/types";
+import { NextNudgeCandidatePanel } from "@/components/live/next-nudge-candidate-panel";
+import { buildReplayTranscriptOrganization } from "@/lib/transcript/organization/build-session-organization";
 
 type InterviewLiveProps = {
   engineSessionId: string;
@@ -15,7 +18,10 @@ export function InterviewLive({
 }: InterviewLiveProps) {
   void engineSessionId;
   const currentTurn = transcriptTurns.at(-1) ?? null;
-  void handoff;
+  const transcriptOrganization = useMemo(
+    () => buildReplayTranscriptOrganization(transcriptTurns, {}, { handoff }),
+    [handoff, transcriptTurns],
+  );
 
   return (
     <section className="panel min-h-[32rem] px-6 py-8 md:px-10 md:py-10">
@@ -71,6 +77,12 @@ export function InterviewLive({
             </p>
           </div>
         </div>
+
+        <NextNudgeCandidatePanel
+          selection={transcriptOrganization.nextNudge}
+          title="Live next nudge"
+          showBackups={false}
+        />
       </div>
     </section>
   );

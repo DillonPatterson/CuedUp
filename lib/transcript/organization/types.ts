@@ -100,6 +100,39 @@ export interface TranscriptRecallCandidate {
   reason: string;
 }
 
+export type TranscriptNextNudgeSourceKind =
+  | "thread"
+  | "claim"
+  | "tension"
+  | "interruption"
+  | "theme";
+
+export type TranscriptNextNudgePromptAngle =
+  | "circle_back"
+  | "press_gently"
+  | "clarify"
+  | "let_it_breathe"
+  | "return_to_interruption"
+  | "test_contradiction";
+
+export interface TranscriptNextNudgeCandidate {
+  id: string;
+  label: string;
+  sourceKind: TranscriptNextNudgeSourceKind;
+  promptAngle: TranscriptNextNudgePromptAngle;
+  readiness: TranscriptRecallReadinessBand;
+  reason: string;
+  supportingTurnIds: string[];
+  debtScore: number;
+  affectiveWeight: ReplayAffectiveIntensity;
+  interrupted: boolean;
+}
+
+export interface TranscriptNextNudgeSelection {
+  bestCandidate: TranscriptNextNudgeCandidate | null;
+  backupCandidates: TranscriptNextNudgeCandidate[];
+}
+
 export interface TranscriptOrganizationSnapshot {
   sessionId: string | null;
   sourceMetadataByTurnId: Record<string, TranscriptOrganizationSourceMetadata>;
@@ -111,6 +144,7 @@ export interface TranscriptOrganizationSnapshot {
   tensionWatch: TranscriptOrganizationBucketItem[];
   completionDebt: TranscriptCompletionDebtEntry[];
   recallCandidates: TranscriptRecallCandidate[];
+  nextNudge: TranscriptNextNudgeSelection;
   summary: {
     entities: string[];
     themes: string[];

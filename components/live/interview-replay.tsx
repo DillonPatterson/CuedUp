@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { DossierLiveHandoff, TranscriptTurn } from "@/types";
 import { NudgeRail } from "@/components/live/nudge-rail";
+import { NextNudgeCandidatePanel } from "@/components/live/next-nudge-candidate-panel";
 import { PresenceDecisionLog } from "@/components/live/presence-decision-log";
 import { ReplayCurrentTurn } from "@/components/live/replay-current-turn";
 import { ReplayListeningSandbox } from "@/components/live/replay-listening-sandbox";
@@ -455,7 +456,6 @@ export function InterviewReplay({
     );
   }
 
-  void transcriptOrganization;
   void handleAppendTurn;
   void handleImportTranscript;
 
@@ -530,44 +530,7 @@ export function InterviewReplay({
             onAutoplayToggle={handleAutoplayToggle}
           />
 
-          <section className="panel p-6">
-            <div className="flex items-center justify-between gap-3">
-              <p className="eyebrow">Recall candidates</p>
-              <span className="rounded-full bg-stone-100 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-stone-700">
-                {transcriptOrganization.recallCandidates.length} visible
-              </span>
-            </div>
-            <div className="mt-4 space-y-3">
-              {transcriptOrganization.recallCandidates.length > 0 ? (
-                transcriptOrganization.recallCandidates.slice(0, 4).map((candidate) => (
-                  <article
-                    key={candidate.id}
-                    className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="text-sm font-medium text-stone-900">
-                        {candidate.label}
-                      </p>
-                      <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] uppercase tracking-[0.14em] text-amber-900">
-                        {candidate.readiness.replaceAll("_", " ")}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-stone-500">
-                      {candidate.sourceKind.replaceAll("_", " ")} | {candidate.recency} | debt{" "}
-                      {candidate.completionDebtScore}
-                    </p>
-                    <p className="mt-2 text-xs leading-5 text-stone-600">
-                      {candidate.reason}
-                    </p>
-                  </article>
-                ))
-              ) : (
-                <p className="text-sm text-stone-600">
-                  No recall candidates are ready yet.
-                </p>
-              )}
-            </div>
-          </section>
+          <NextNudgeCandidatePanel selection={transcriptOrganization.nextNudge} />
         </div>
       </div>
 

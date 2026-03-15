@@ -1,4 +1,5 @@
 import type { DossierLiveHandoff, TranscriptTurn } from "@/types";
+import { selectNextNudgeSelection } from "@/lib/live/next-nudge-selector";
 import type { ReplayCommittedTurnMetadata } from "@/lib/transcript/manual-turns";
 import { buildReplayDossierLexicon } from "@/lib/transcript/lexical-tiers";
 import { analyzeReplayCommittedTurn } from "@/lib/transcript/turn-analysis";
@@ -687,8 +688,7 @@ export function buildReplayTranscriptOrganization(
     tensionWatch,
     debtMap,
   );
-
-  return {
+  const nextNudge = selectNextNudgeSelection({
     sessionId: turns[0]?.sessionId ?? null,
     sourceMetadataByTurnId,
     annotations,
@@ -706,5 +706,27 @@ export function buildReplayTranscriptOrganization(
       unresolvedThreadCues: collectUniqueLabels(annotations, "thread_cue"),
       tensions: collectUniqueLabels(annotations, "tension"),
     },
+  });
+  const summary = {
+    entities: collectUniqueLabels(annotations, "entity"),
+    themes: collectUniqueLabels(annotations, "theme"),
+    claims: collectUniqueLabels(annotations, "claim"),
+    unresolvedThreadCues: collectUniqueLabels(annotations, "thread_cue"),
+    tensions: collectUniqueLabels(annotations, "tension"),
+  };
+
+  return {
+    sessionId: turns[0]?.sessionId ?? null,
+    sourceMetadataByTurnId,
+    annotations,
+    annotationsByTurnId,
+    emergingThemes,
+    openThreads,
+    notableClaims,
+    tensionWatch,
+    completionDebt,
+    recallCandidates,
+    nextNudge,
+    summary,
   };
 }

@@ -69,7 +69,7 @@ async function captureWorkspaceSnapshot(page: Page) {
   return {
     workspace: await regionText(page.locator("#conversation-workspace")),
     transcriptRail: await regionText(page.locator("#workspace-transcript-rail")),
-    recallQueue: await regionText(headingRegion(page, "Recall candidates")),
+    nextNudge: await regionText(headingRegion(page, "Best next nudge")),
   };
 }
 
@@ -125,9 +125,15 @@ async function main() {
       "Current-turn analyzer did not render completion status.",
     );
     assert.ok(
-      firstSnapshot.recallQueue.includes("risk") ||
-        firstSnapshot.recallQueue.includes("personal"),
-      "Recall queue did not populate after committing speech.",
+      firstSnapshot.nextNudge.includes("His relapse made risk feel personal.") ||
+        firstSnapshot.nextNudge.includes("risk"),
+      "Best next nudge panel did not populate after committing speech.",
+    );
+    assert.ok(
+      firstSnapshot.nextNudge.includes("press gently") ||
+        firstSnapshot.nextNudge.includes("circle back") ||
+        firstSnapshot.nextNudge.includes("let it breathe"),
+      "Best next nudge panel did not expose a prompt angle.",
     );
 
     await draftBox.fill("I changed my mind because");
@@ -147,6 +153,10 @@ async function main() {
       secondSnapshot.workspace.includes("incomplete") ||
         secondSnapshot.workspace.includes("truncated"),
       "Second committed turn did not surface incomplete/truncated analysis.",
+    );
+    assert.ok(
+      secondSnapshot.nextNudge.length > 0,
+      "Best next nudge panel was empty after the second commit.",
     );
 
     console.log("Replay speech-only proof passed.");
