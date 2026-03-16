@@ -159,6 +159,17 @@ async function main() {
       "Best next nudge panel was empty after the second commit.",
     );
 
+    await clickButton(page, "Show engine detail");
+    const cueDecisions = await regionText(headingRegion(page, "Cue decisions"));
+    assert.ok(
+      cueDecisions.toLowerCase().includes("suppressed"),
+      "Second rapid commit did not produce a suppressed guard decision.",
+    );
+    assert.ok(
+      cueDecisions.toLowerCase().includes("cooldown"),
+      "Second rapid commit did not show a cooldown guard reason.",
+    );
+
     console.log("Replay speech-only proof passed.");
   } finally {
     await browser.close();

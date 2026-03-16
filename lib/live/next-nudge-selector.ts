@@ -171,11 +171,15 @@ function buildRankingScore(candidate: TranscriptRecallCandidate) {
             ? 1.5
             : 1;
 
+  // These weights are provisional deterministic tuning for replay inspection,
+  // not calibrated truth about real interview performance.
   return (
     readinessRank(candidate.readiness) * 4 +
     relevanceRank(candidate.relevanceToCurrentTurn) * 3 +
     recencyRank(candidate.recency) * 2 +
     affectiveRank(candidate.affectiveWeight) +
+    // Completion debt is already clamped upstream; the selector caps its
+    // contribution further so debt cannot dominate every other signal.
     Math.min(candidate.completionDebtScore, 8) +
     (candidate.interrupted ? 2 : 0) +
     sourceBoost
@@ -212,7 +216,8 @@ function buildFallbackCandidate(
   return {
     id: "next-nudge:let-it-breathe",
     label: "Let it breathe",
-    sourceKind: "theme",
+    // The fallback is a selector directive, not transcript-derived content.
+    sourceKind: "directive",
     promptAngle: "let_it_breathe",
     readiness: "not_ready",
     reason:

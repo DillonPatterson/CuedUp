@@ -101,6 +101,7 @@ export interface TranscriptRecallCandidate {
 }
 
 export type TranscriptNextNudgeSourceKind =
+  | "directive"
   | "thread"
   | "claim"
   | "tension"
@@ -130,6 +131,8 @@ export interface TranscriptNextNudgeCandidate {
 
 export interface TranscriptNextNudgeSelection {
   bestCandidate: TranscriptNextNudgeCandidate | null;
+  // Backup candidates are replay/debug only and intentionally stay out of the
+  // sparse live surface and any later audio-delivery path.
   backupCandidates: TranscriptNextNudgeCandidate[];
 }
 
