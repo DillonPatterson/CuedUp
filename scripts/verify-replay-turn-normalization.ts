@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { buildMockDossier } from "@/lib/dossier/mock";
+import { buildAudioCueEvent } from "@/lib/live/audio-cue-engine";
 import {
   appendReplayTranscriptTurns,
   importReplayTranscriptTurns,
@@ -308,6 +309,13 @@ assert.deepEqual(
   [manualOrganization.recallCandidates[0]!.turnIds[0]!],
 );
 assert.equal(manualOrganization.nextNudge.backupCandidates.length, 0);
+const manualAudioCue = buildAudioCueEvent(manualOrganization.nextNudge);
+assert.equal(manualAudioCue?.text, "stay with relapse risk");
+assert.equal(manualAudioCue?.validation.wordCount, 4);
+assert.equal(manualAudioCue?.validation.maxWordCount, 5);
+assert.deepEqual(manualAudioCue?.validation.bannedTerms, []);
+assert.equal(manualAudioCue?.validation.hasQuestionMark, false);
+assert.equal(manualAudioCue?.validation.isAwkwardlyLong, false);
 assert.deepEqual(
   manualOrganization.annotations.map((annotation) => annotation.kind),
   ["theme", "theme", "theme", "claim"],
@@ -412,6 +420,11 @@ assert.equal(
   debtBeforeResolution.nextNudge.bestCandidate?.label,
   "I changed my mind because",
 );
+const debtAudioCue = buildAudioCueEvent(debtBeforeResolution.nextNudge);
+assert.equal(debtAudioCue?.text, "go back there");
+assert.equal(debtAudioCue?.validation.wordCount, 3);
+assert.equal(debtAudioCue?.validation.maxWordCount, 3);
+assert.equal(debtAudioCue?.validation.hasQuestionMark, false);
 
 const resolvedTurns = appendReplayTranscriptTurns(debtTurns.turns, SESSION_ID, [
   buildDraft(

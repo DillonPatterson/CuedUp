@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { DossierLiveHandoff, TranscriptTurn } from "@/types";
+import { AudioCuePlayer } from "@/components/live/audio-cue-player";
 import { NudgeRail } from "@/components/live/nudge-rail";
 import { NextNudgeCandidatePanel } from "@/components/live/next-nudge-candidate-panel";
 import { PresenceDecisionLog } from "@/components/live/presence-decision-log";
@@ -11,6 +12,7 @@ import { ReplayListeningSandbox } from "@/components/live/replay-listening-sandb
 import { ReplayUpdatesPanel } from "@/components/live/replay-updates-panel";
 import { ThreadBank } from "@/components/live/thread-bank";
 import { TopicMap } from "@/components/live/topic-map";
+import { buildAudioCueEvent } from "@/lib/live/audio-cue-engine";
 import { buildFreshReplayHandoff } from "@/lib/replay/fresh-workspace";
 import { transcriptTurnSchema } from "@/lib/schemas/transcript";
 import { buildInterviewSessionTimeline } from "@/lib/state/interview-session-timeline";
@@ -148,6 +150,7 @@ export function InterviewReplay({
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
   const [showEngineDetail, setShowEngineDetail] = useState(false);
+  const [audioPlayRequest, setAudioPlayRequest] = useState(0);
   const activeHandoff = useMemo(
     () => (isFreshInterview ? buildFreshReplayHandoff() : handoff),
     [handoff, isFreshInterview],
@@ -192,6 +195,10 @@ export function InterviewReplay({
   );
   const currentSnapshot = timeline.snapshots[currentSnapshotIndex];
   const currentTurnIndex = currentSnapshotIndex - 1;
+  const audioCue = useMemo(
+    () => buildAudioCueEvent(transcriptOrganization.nextNudge),
+    [transcriptOrganization.nextNudge],
+  );
   const recentDecisions = timeline.decisionLog
     .slice(Math.max(0, currentSnapshotIndex - 5), currentSnapshotIndex)
     .reverse();
@@ -508,6 +515,8 @@ export function InterviewReplay({
         <ReplayUpdatesPanel onClose={() => setIsUpdatesOpen(false)} />
       ) : null}
 
+      <AudioCuePlayer cue={audioCue} playRequest={audioPlayRequest} />
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)] xl:items-start">
         <ReplayListeningSandbox
           engineSessionId={engineSessionId}
@@ -530,7 +539,55 @@ export function InterviewReplay({
             onAutoplayToggle={handleAutoplayToggle}
           />
 
-          <NextNudgeCandidatePanel selection={transcriptOrganization.nextNudge} />
+          <NextNudgeCandidatePanel
+            selection={transcriptOrganization.nextNudge}
+            footer={
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
+                      Replay audio cue
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-stone-900">
+                      {audioCue?.text ?? "No audio cue ready"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAudioPlayRequest((value) => value + 1)}
+                    disabled={!audioCue}
+                    className="rounded-full bg-amber-700 px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Preview audio cue
+                  </button>
+                </div>
+                {audioCue ? (
+                  <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-stone-600">
+                    <span className="rounded-full bg-stone-100 px-3 py-1">
+                      {audioCue.validation.wordCount} / {audioCue.validation.maxWordCount} words
+                    </span>
+                    <span className="rounded-full bg-stone-100 px-3 py-1">
+                      {audioCue.validation.bannedTerms.length === 0
+                        ? "No banned terms"
+                        : `Banned ${audioCue.validation.bannedTerms.join(", ")}`}
+                    </span>
+                    <span className="rounded-full bg-stone-100 px-3 py-1">
+                      {audioCue.validation.hasQuestionMark
+                        ? "Has question mark"
+                        : "No question mark"}
+                    </span>
+                    <span className="rounded-full bg-stone-100 px-3 py-1">
+                      {audioCue.validation.isEmpty
+                        ? "Empty cue"
+                        : audioCue.validation.isAwkwardlyLong
+                          ? "Too long"
+                          : "Length okay"}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            }
+          />
         </div>
       </div>
 

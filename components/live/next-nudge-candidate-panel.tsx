@@ -1,11 +1,13 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { TranscriptNextNudgeSelection } from "@/lib/transcript/organization/types";
 
 type NextNudgeCandidatePanelProps = {
   selection: TranscriptNextNudgeSelection;
   title?: string;
   showBackups?: boolean;
+  footer?: ReactNode;
 };
 
 function formatLabel(value: string) {
@@ -16,6 +18,7 @@ export function NextNudgeCandidatePanel({
   selection,
   title = "Best next nudge",
   showBackups = true,
+  footer,
 }: NextNudgeCandidatePanelProps) {
   const bestCandidate = selection.bestCandidate;
 
@@ -77,6 +80,8 @@ export function NextNudgeCandidatePanel({
           ))}
         </div>
       ) : null}
+
+      {footer ? <div className="mt-5">{footer}</div> : null}
     </section>
   );
 }

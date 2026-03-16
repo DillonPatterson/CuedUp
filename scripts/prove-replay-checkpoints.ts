@@ -70,6 +70,7 @@ async function captureWorkspaceSnapshot(page: Page) {
     workspace: await regionText(page.locator("#conversation-workspace")),
     transcriptRail: await regionText(page.locator("#workspace-transcript-rail")),
     nextNudge: await regionText(headingRegion(page, "Best next nudge")),
+    audioCue: await regionText(headingRegion(page, "Replay audio cue")),
   };
 }
 
@@ -134,6 +135,11 @@ async function main() {
         firstSnapshot.nextNudge.includes("circle back") ||
         firstSnapshot.nextNudge.includes("let it breathe"),
       "Best next nudge panel did not expose a prompt angle.",
+    );
+    assert.ok(
+      firstSnapshot.audioCue.includes("Preview audio cue") &&
+        firstSnapshot.audioCue.includes("No banned terms"),
+      "Replay audio cue validator/readout did not render.",
     );
 
     await draftBox.fill("I changed my mind because");
