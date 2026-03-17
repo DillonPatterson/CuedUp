@@ -66,11 +66,17 @@ async function clearListeningSandbox(page: Page) {
 }
 
 async function captureWorkspaceSnapshot(page: Page) {
+  const nextNudgeRegion = headingRegion(page, "Best next nudge");
+  const audioPlayerStatus = page.locator("#audio-cue-player-status");
+
   return {
     workspace: await regionText(page.locator("#conversation-workspace")),
     transcriptRail: await regionText(page.locator("#workspace-transcript-rail")),
-    nextNudge: await regionText(headingRegion(page, "Best next nudge")),
-    audioCue: await regionText(headingRegion(page, "Replay audio cue (debug only)")),
+    nextNudge: await regionText(nextNudgeRegion),
+    audioCueText: await audioPlayerStatus.getAttribute("data-audio-cue"),
+    audioCueStatus: await audioPlayerStatus.getAttribute("data-audio-status"),
+    audioCueButtonCount: await nextNudgeRegion.getByRole("button").count(),
+    audioCueChipCount: await nextNudgeRegion.locator("span.rounded-full").count(),
   };
 }
 
@@ -134,12 +140,20 @@ async function main() {
       "Best next nudge panel did not render.",
     );
     assert.ok(
-      firstSnapshot.audioCue.includes("Preview audio cue"),
-      "Replay audio cue preview button did not render.",
+      firstSnapshot.audioCueButtonCount >= 1,
+      "Replay audio cue action button did not render in the next-nudge panel.",
     );
     assert.ok(
-      firstSnapshot.audioCue.includes("Formatter diagnostics"),
-      "Replay audio cue formatter diagnostics did not render.",
+      firstSnapshot.audioCueChipCount >= 5,
+      "Replay audio cue diagnostics did not render in the next-nudge panel.",
+    );
+    assert.ok(
+      (firstSnapshot.audioCueStatus ?? "").length > 0,
+      "Replay audio cue player status hook did not render.",
+    );
+    assert.ok(
+      (firstSnapshot.audioCueText ?? "").length > 0,
+      "Replay audio cue text hook did not populate after committing speech.",
     );
 
     await draftBox.fill("I changed my mind because");
