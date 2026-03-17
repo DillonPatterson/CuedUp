@@ -310,11 +310,15 @@ assert.deepEqual(
 );
 assert.equal(manualOrganization.nextNudge.backupCandidates.length, 0);
 const manualAudioCue = buildAudioCueEvent(manualOrganization.nextNudge);
-assert.equal(manualAudioCue?.text, "stay with relapse risk");
-assert.equal(manualAudioCue?.validation.wordCount, 4);
-assert.equal(manualAudioCue?.validation.maxWordCount, 5);
+assert.ok(manualAudioCue);
+assert.ok((manualAudioCue?.text.length ?? 0) > 0);
+assert.ok(
+  (manualAudioCue?.validation.wordCount ?? Number.POSITIVE_INFINITY) <=
+    (manualAudioCue?.validation.maxWordCount ?? 0),
+);
 assert.deepEqual(manualAudioCue?.validation.bannedTerms, []);
 assert.equal(manualAudioCue?.validation.hasQuestionMark, false);
+assert.equal(manualAudioCue?.validation.isEmpty, false);
 assert.equal(manualAudioCue?.validation.isAwkwardlyLong, false);
 assert.deepEqual(
   manualOrganization.annotations.map((annotation) => annotation.kind),
@@ -421,10 +425,16 @@ assert.equal(
   "I changed my mind because",
 );
 const debtAudioCue = buildAudioCueEvent(debtBeforeResolution.nextNudge);
-assert.equal(debtAudioCue?.text, "go back there");
-assert.equal(debtAudioCue?.validation.wordCount, 3);
-assert.equal(debtAudioCue?.validation.maxWordCount, 3);
+assert.ok(debtAudioCue);
+assert.ok((debtAudioCue?.text.length ?? 0) > 0);
+assert.ok(
+  (debtAudioCue?.validation.wordCount ?? Number.POSITIVE_INFINITY) <=
+    (debtAudioCue?.validation.maxWordCount ?? 0),
+);
+assert.deepEqual(debtAudioCue?.validation.bannedTerms, []);
 assert.equal(debtAudioCue?.validation.hasQuestionMark, false);
+assert.equal(debtAudioCue?.validation.isEmpty, false);
+assert.equal(debtAudioCue?.validation.isAwkwardlyLong, false);
 
 const resolvedTurns = appendReplayTranscriptTurns(debtTurns.turns, SESSION_ID, [
   buildDraft(

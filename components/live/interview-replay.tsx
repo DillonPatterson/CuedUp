@@ -546,10 +546,13 @@ export function InterviewReplay({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                      Replay audio cue
+                      Replay audio cue (debug only)
                     </p>
                     <p className="mt-2 text-lg font-semibold text-stone-900">
                       {audioCue?.text ?? "No audio cue ready"}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-stone-500">
+                      Sandbox preview of the formatter output only.
                     </p>
                   </div>
                   <button
@@ -562,27 +565,32 @@ export function InterviewReplay({
                   </button>
                 </div>
                 {audioCue ? (
-                  <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-stone-600">
-                    <span className="rounded-full bg-stone-100 px-3 py-1">
-                      {audioCue.validation.wordCount} / {audioCue.validation.maxWordCount} words
-                    </span>
-                    <span className="rounded-full bg-stone-100 px-3 py-1">
-                      {audioCue.validation.bannedTerms.length === 0
-                        ? "No banned terms"
-                        : `Banned ${audioCue.validation.bannedTerms.join(", ")}`}
-                    </span>
-                    <span className="rounded-full bg-stone-100 px-3 py-1">
-                      {audioCue.validation.hasQuestionMark
-                        ? "Has question mark"
-                        : "No question mark"}
-                    </span>
-                    <span className="rounded-full bg-stone-100 px-3 py-1">
-                      {audioCue.validation.isEmpty
-                        ? "Empty cue"
-                        : audioCue.validation.isAwkwardlyLong
-                          ? "Too long"
-                          : "Length okay"}
-                    </span>
+                  <div className="mt-4">
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                      Formatter diagnostics
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-stone-600">
+                      <span className="rounded-full bg-stone-100 px-3 py-1">
+                        {audioCue.validation.wordCount} / {audioCue.validation.maxWordCount} words
+                      </span>
+                      <span className="rounded-full bg-stone-100 px-3 py-1">
+                        {audioCue.validation.bannedTerms.length === 0
+                          ? "Banned terms clear"
+                          : `Banned ${audioCue.validation.bannedTerms.join(", ")}`}
+                      </span>
+                      <span className="rounded-full bg-stone-100 px-3 py-1">
+                        {audioCue.validation.hasQuestionMark
+                          ? "Question mark present"
+                          : "Question mark clear"}
+                      </span>
+                      <span className="rounded-full bg-stone-100 px-3 py-1">
+                        {audioCue.validation.isEmpty
+                          ? "Cue empty"
+                          : audioCue.validation.isAwkwardlyLong
+                            ? "Length flagged"
+                            : "Length within cap"}
+                      </span>
+                    </div>
                   </div>
                 ) : null}
               </div>
