@@ -60,6 +60,8 @@ export const sessionThreadSchema = z.object({
   threadKey: z.string().min(1),
   label: z.string().min(1),
   sourceKind: z.enum(["theme", "claim", "thread_cue", "tension"]),
+  // Phase 1 keeps the ledger deliberately small: open, cooling, resolved.
+  // Richer lifecycle states from the engine concept doc are deferred.
   status: z.enum(["open", "cooling", "resolved"]),
   debtScore: z.number().int().min(0).max(10),
   dropScore: z.number().min(0),

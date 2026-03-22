@@ -12,6 +12,13 @@ import { assembleCanonicalTurns } from "@/lib/session-memory/turn-assembly";
 
 const SESSION_ID = "00000000-0000-4000-8000-000000000001";
 
+function findThreadByLabel(
+  store: ReturnType<typeof buildSessionMemoryStore>,
+  label: string,
+) {
+  return store.session_threads.find((thread) => thread.label === label) ?? null;
+}
+
 function buildEvent(
   sequence: number,
   text: string,
@@ -104,6 +111,13 @@ const unresolvedQuery = runSessionRetrievalQuery(threadStore, {
 });
 assert.ok(unresolvedQuery.basis.length > 0);
 
+const exactDebtStore = buildSessionMemoryStore(SESSION_ID, [
+  buildEvent(1, "Risk matters here.", {
+    utteranceKey: "debt-1",
+  }),
+]);
+assert.equal(findThreadByLabel(exactDebtStore, "risk")?.debtScore, 2);
+
 const interruptedOnlyStore = buildSessionMemoryStore(SESSION_ID, [
   buildEvent(1, "I changed my mind because", {
     utteranceKey: "speech-1",
@@ -137,7 +151,7 @@ assert.deepEqual(
   ["I changed my mind because"],
 );
 
-const resolvedStore = buildSessionMemoryStore(SESSION_ID, [
+const coolingStore = buildSessionMemoryStore(SESSION_ID, [
   buildEvent(1, "His relapse made risk feel personal.", {
     utteranceKey: "speech-1",
   }),
@@ -151,20 +165,127 @@ const resolvedStore = buildSessionMemoryStore(SESSION_ID, [
 ]);
 
 assert.ok(
-  resolvedStore.session_threads.some(
+  coolingStore.session_threads.some(
     (thread) => thread.label === "risk" && thread.status === "cooling",
   ),
 );
 assert.ok(
-  !getReactivationCandidates(resolvedStore, SESSION_ID).some(
+  !getReactivationCandidates(coolingStore, SESSION_ID).some(
     (thread) => thread.label === "risk",
   ),
 );
-const reactivationQuery = runSessionRetrievalQuery(resolvedStore, {
+const reactivationQuery = runSessionRetrievalQuery(coolingStore, {
   sessionId: SESSION_ID,
   mode: "reactivation_candidates",
 });
 assert.ok(reactivationQuery.basis.length > 0);
 assert.ok(!reactivationQuery.threads.some((thread) => thread.label === "risk"));
+
+const resolvedStore = buildSessionMemoryStore(SESSION_ID, [
+  buildEvent(1, "His relapse made risk feel personal.", {
+    utteranceKey: "resolve-1",
+  }),
+  buildEvent(
+    2,
+    "What changed was I stopped treating family risk like a strategy problem.",
+    {
+      utteranceKey: "resolve-2",
+    },
+  ),
+  buildEvent(3, "The board wanted a cleaner narrative.", {
+    utteranceKey: "resolve-3",
+  }),
+  buildEvent(4, "Mission discipline mattered after that.", {
+    utteranceKey: "resolve-4",
+  }),
+  buildEvent(5, "Accountability felt different after the shift.", {
+    utteranceKey: "resolve-5",
+  }),
+]);
+assert.equal(findThreadByLabel(resolvedStore, "risk")?.status, "resolved");
+assert.equal(findThreadByLabel(resolvedStore, "risk")?.dropScore, 0);
+
+const retrievalOrderingStore = buildSessionMemoryStore(SESSION_ID, [
+  buildEvent(1, "Risk mattered immediately.", {
+    utteranceKey: "order-1",
+  }),
+  buildEvent(2, "Okay.", {
+    utteranceKey: "order-2",
+  }),
+  buildEvent(3, "Fine.", {
+    utteranceKey: "order-3",
+  }),
+  buildEvent(4, "Later.", {
+    utteranceKey: "order-4",
+  }),
+  buildEvent(5, "It was about the board and...", {
+    utteranceKey: "order-5",
+  }),
+]);
+const orderedUnresolved = getUnresolvedThreads(retrievalOrderingStore, SESSION_ID);
+const unresolvedRiskIndex = orderedUnresolved.findIndex(
+  (thread) => thread.label === "risk",
+);
+const unresolvedTruncatedIndex = orderedUnresolved.findIndex(
+  (thread) => thread.label === "It was about the board and...",
+);
+assert.ok(unresolvedTruncatedIndex >= 0);
+assert.ok(unresolvedRiskIndex >= 0);
+assert.ok(unresolvedTruncatedIndex < unresolvedRiskIndex);
+const orderedReactivation = getReactivationCandidates(
+  retrievalOrderingStore,
+  SESSION_ID,
+);
+const reactivationRiskIndex = orderedReactivation.findIndex(
+  (thread) => thread.label === "risk",
+);
+const reactivationTruncatedIndex = orderedReactivation.findIndex(
+  (thread) => thread.label === "It was about the board and...",
+);
+assert.ok(reactivationRiskIndex >= 0);
+assert.ok(reactivationTruncatedIndex >= 0);
+assert.ok(reactivationRiskIndex < reactivationTruncatedIndex);
+
+const reactivatedStore = buildSessionMemoryStore(SESSION_ID, [
+  buildEvent(1, "Risk felt personal.", {
+    utteranceKey: "reactivate-1",
+  }),
+  buildEvent(2, "We moved on too quickly.", {
+    utteranceKey: "reactivate-2",
+  }),
+  buildEvent(3, "The downside still feels like risk.", {
+    utteranceKey: "reactivate-3",
+  }),
+  buildEvent(4, "Mission came up after that.", {
+    utteranceKey: "reactivate-4",
+  }),
+]);
+const reactivatedRisk = findThreadByLabel(reactivatedStore, "risk");
+assert.equal(reactivatedRisk?.mentionCount, 2);
+assert.equal(
+  reactivatedRisk?.lastMentionTurnId,
+  reactivatedStore.session_turns[2]?.id,
+);
+assert.deepEqual(
+  getTurnsForThread(reactivatedStore, SESSION_ID, reactivatedRisk!.threadKey).map(
+    (turn) => turn.text,
+  ),
+  ["Risk felt personal.", "The downside still feels like risk."],
+);
+
+const fragmentedIdentityStore = buildSessionMemoryStore(SESSION_ID, [
+  buildEvent(1, "I changed my mind because the board got involved.", {
+    utteranceKey: "fragment-1",
+  }),
+  buildEvent(2, "I changed my mind because leadership folded.", {
+    utteranceKey: "fragment-2",
+  }),
+]);
+const fragmentedClaims = fragmentedIdentityStore.session_threads.filter(
+  (thread) =>
+    thread.sourceKind === "claim" &&
+    thread.label.startsWith("I changed my mind because"),
+);
+assert.equal(fragmentedClaims.length, 2);
 
 console.log("Session memory contract passed.");

@@ -43,6 +43,8 @@ export function getUnresolvedThreads(
   store: SessionMemoryStore,
   sessionId: string,
 ) {
+  // Phase 1 unresolved ranking is intentionally simple and inspectable:
+  // debt score first, then drop score as a tiebreaker.
   return getSessionThreads(store, sessionId)
     .filter((thread) => thread.status === "open")
     .sort((left, right) => right.debtScore - left.debtScore || right.dropScore - left.dropScore);
@@ -67,6 +69,8 @@ export function getReactivationCandidates(
   store: SessionMemoryStore,
   sessionId: string,
 ) {
+  // Reactivation emphasizes what was mentioned and then left behind:
+  // drop score first, then debt score as a tiebreaker.
   return getSessionThreads(store, sessionId)
     .filter((thread) => thread.status === "open" && thread.dropScore > 0)
     .sort((left, right) => right.dropScore - left.dropScore || right.debtScore - left.debtScore);
