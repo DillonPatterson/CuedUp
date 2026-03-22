@@ -1090,7 +1090,7 @@ export function ReplayListeningSandbox({
 
       <div className="mt-5 rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
         <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-          Sandbox status
+          What is happening
         </p>
         <p className="mt-2 text-sm leading-6 text-stone-700">
           {statusMessage}
@@ -1101,10 +1101,10 @@ export function ReplayListeningSandbox({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-              Live cue + idea sorting
+              Brain now
             </p>
             <p className="mt-1 text-sm leading-6 text-stone-700">
-              Updates while you speak or type so you can see what the mic is hearing and how it is being sorted before commit.
+              This updates while you speak or type so you can see what was heard and how it is being organized before commit.
             </p>
           </div>
           <span
@@ -1160,7 +1160,7 @@ export function ReplayListeningSandbox({
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
                 <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-                  Cue ideas
+                  Pressure / cue signals
                 </p>
                 {liveCueSignals.length > 0 ? (
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -1181,7 +1181,7 @@ export function ReplayListeningSandbox({
               </article>
               <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
                 <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-                  Ideas spotted
+                  Organized ideas
                 </p>
                 {livePreview.memory.claims[0] ? (
                   <p className="mt-2 text-sm leading-6 text-stone-800">
@@ -1221,7 +1221,7 @@ export function ReplayListeningSandbox({
           </>
         ) : (
           <p className="mt-4 text-sm leading-6 text-stone-600">
-            Start listening or type in the draft box to see live cue ideas and idea sorting before you commit anything.
+            Start listening or type in the draft box to see the brain organize what it hears before you commit anything.
           </p>
         )}
       </div>
@@ -1249,24 +1249,10 @@ export function ReplayListeningSandbox({
         </button>
         <button
           type="button"
-          onClick={handleRestartListening}
-          className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+          onClick={handleCommitDrafts}
+          className="rounded-full border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-900 transition hover:border-emerald-400"
         >
-          Restart listening
-        </button>
-        <button
-          type="button"
-          onClick={handleClearDraft}
-          className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
-        >
-          Clear draft
-        </button>
-        <button
-          type="button"
-          onClick={handleClearSegments}
-          className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
-        >
-          Clear segments
+          Commit to replay
         </button>
         <button
           type="button"
@@ -1316,19 +1302,10 @@ export function ReplayListeningSandbox({
           </p>
         </div>
 
-        <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-              Commit mapping
-            </p>
-            <button
-              type="button"
-              onClick={handleCommitDrafts}
-              className="rounded-full border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-900 transition hover:border-emerald-400"
-            >
-              Commit to replay
-            </button>
-          </div>
+        <details className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+          <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-stone-500">
+            Advanced commit controls
+          </summary>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <label className="block">
@@ -1484,10 +1461,14 @@ export function ReplayListeningSandbox({
               </p>
             </div>
           ) : null}
-        </div>
+        </details>
 
-        <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <details className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+          <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-stone-500">
+            Captured segments and raw staging
+          </summary>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
               onClick={() => setSegmentsExpanded((value) => !value)}
@@ -1496,13 +1477,36 @@ export function ReplayListeningSandbox({
               {segments.length} segment{segments.length === 1 ? "" : "s"} captured -{" "}
               {segmentsExpanded ? "hide" : "show"}
             </button>
-            <button
-              type="button"
-              onClick={handleRebuildDraftFromSegments}
-              className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:border-stone-400"
-            >
-              Rebuild draft from segments
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleRebuildDraftFromSegments}
+                className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:border-stone-400"
+              >
+                Rebuild draft
+              </button>
+              <button
+                type="button"
+                onClick={handleRestartListening}
+                className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:border-stone-400"
+              >
+                Restart listening
+              </button>
+              <button
+                type="button"
+                onClick={handleClearDraft}
+                className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:border-stone-400"
+              >
+                Clear draft
+              </button>
+              <button
+                type="button"
+                onClick={handleClearSegments}
+                className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:border-stone-400"
+              >
+                Clear segments
+              </button>
+            </div>
           </div>
 
           {segmentsExpanded ? (
@@ -1545,7 +1549,7 @@ export function ReplayListeningSandbox({
               )}
             </div>
           ) : null}
-        </div>
+        </details>
       </div>
 
       {error ? (

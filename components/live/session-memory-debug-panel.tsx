@@ -30,17 +30,18 @@ export function SessionMemoryDebugPanel({
     sessionId: store.sessionId,
     mode: "unresolved_threads",
   });
+  const latestTurn = store.session_turns.at(-1) ?? null;
 
   return (
     <section className="rounded-3xl border border-stone-200 bg-white/85 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-            Session memory debug
+            Session memory
           </p>
           <p className="mt-1 text-sm leading-6 text-stone-700">
-            Replay-only proof of transcript event assembly, thread memory storage,
-            and retrieval.
+            Replay-only proof that heard words are turning into stable turns,
+            thread memory, and resurfacing candidates.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-stone-600">
@@ -56,112 +57,24 @@ export function SessionMemoryDebugPanel({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 xl:grid-cols-2">
-        <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-            Raw transcript events
-          </p>
-          <div className="mt-3 space-y-2">
-            {store.session_events.length > 0 ? (
-              store.session_events.map((event) => (
-                <div
-                  key={event.id}
-                  className="rounded-2xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800"
-                >
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
-                    Seq {event.sequence} {formatLabel(event.eventType)} {formatLabel(event.source)}
-                  </p>
-                  <p className="mt-1 leading-6">{event.text}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm leading-6 text-stone-600">
-                No transcript events captured yet.
-              </p>
-            )}
-          </div>
-        </article>
-
-        <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-            Canonical turns
-          </p>
-          <div className="mt-3 space-y-2">
-            {store.session_turns.length > 0 ? (
-              store.session_turns.map((turn) => (
-                <div
-                  key={turn.id}
-                  className="rounded-2xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800"
-                >
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
-                    Turn {turn.sequence} {turn.speaker ?? "unknown"}
-                  </p>
-                  <p className="mt-1 leading-6">{turn.text}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm leading-6 text-stone-600">
-                No canonical turns finalized yet.
-              </p>
-            )}
-          </div>
-        </article>
-
-        <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-            Thread mentions
-          </p>
-          <div className="mt-3 space-y-2">
-            {store.session_thread_mentions.length > 0 ? (
-              store.session_thread_mentions.map((mention) => (
-                <div
-                  key={mention.id}
-                  className="rounded-2xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800"
-                >
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
-                    {formatLabel(mention.mentionKind)} linked to {mention.turnId}
-                  </p>
-                  <p className="mt-1 leading-6">{mention.label}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm leading-6 text-stone-600">
-                No thread mentions extracted yet.
-              </p>
-            )}
-          </div>
-        </article>
-
-        <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-            Session thread ledger
-          </p>
-          <div className="mt-3 space-y-2">
-            {store.session_threads.length > 0 ? (
-              store.session_threads.map((thread) => (
-                <div
-                  key={thread.threadKey}
-                  className="rounded-2xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800"
-                >
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
-                    {formatLabel(thread.sourceKind)} {thread.status} debt {thread.debtScore}
-                  </p>
-                  <p className="mt-1 leading-6">{thread.label}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm leading-6 text-stone-600">
-                No session threads yet.
-              </p>
-            )}
-          </div>
-        </article>
-      </div>
-
       <div className="mt-5 grid gap-4 xl:grid-cols-3">
         <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
           <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-            Unresolved threads query
+            Stable turns
+          </p>
+          <p className="mt-2 text-sm leading-6 text-stone-800">
+            {latestTurn ? latestTurn.text : "No stable turn yet."}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-stone-600">
+            {latestTurn
+              ? `Turn ${latestTurn.sequence} ${latestTurn.speaker ?? "unknown"}`
+              : "Waiting for a finalized turn."}
+          </p>
+        </article>
+
+        <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+            Open threads
           </p>
           <p className="mt-2 text-sm leading-6 text-stone-700">
             {unresolvedQuery.threads.length} unresolved thread
@@ -178,7 +91,7 @@ export function SessionMemoryDebugPanel({
 
         <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
           <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-            Most dropped thread
+            Best resurfacing candidate
           </p>
           <p className="mt-2 text-sm leading-6 text-stone-800">
             {mostDroppedThread
@@ -192,7 +105,7 @@ export function SessionMemoryDebugPanel({
 
         <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
           <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
-            Turns for top thread
+            Supporting turns
           </p>
           <div className="mt-3 space-y-2">
             {sampleThreadTurns.length > 0 ? (
@@ -209,6 +122,89 @@ export function SessionMemoryDebugPanel({
           </div>
         </article>
       </div>
+
+      <details className="mt-5 rounded-2xl border border-stone-200 bg-stone-50/60 p-4">
+        <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-stone-500">
+          Raw debug details
+        </summary>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-3">
+          <article className="rounded-2xl border border-stone-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+              Raw transcript events
+            </p>
+            <div className="mt-3 space-y-2">
+              {store.session_events.length > 0 ? (
+                store.session_events.map((event) => (
+                  <div
+                    key={event.id}
+                    className="rounded-2xl border border-stone-200 bg-stone-50/70 px-3 py-2 text-sm text-stone-800"
+                  >
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                      Seq {event.sequence} {formatLabel(event.eventType)} {formatLabel(event.source)}
+                    </p>
+                    <p className="mt-1 leading-6">{event.text}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-6 text-stone-600">
+                  No transcript events captured yet.
+                </p>
+              )}
+            </div>
+          </article>
+
+          <article className="rounded-2xl border border-stone-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+              Thread mentions
+            </p>
+            <div className="mt-3 space-y-2">
+              {store.session_thread_mentions.length > 0 ? (
+                store.session_thread_mentions.map((mention) => (
+                  <div
+                    key={mention.id}
+                    className="rounded-2xl border border-stone-200 bg-stone-50/70 px-3 py-2 text-sm text-stone-800"
+                  >
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                      {formatLabel(mention.mentionKind)} linked to {mention.turnId}
+                    </p>
+                    <p className="mt-1 leading-6">{mention.label}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-6 text-stone-600">
+                  No thread mentions extracted yet.
+                </p>
+              )}
+            </div>
+          </article>
+
+          <article className="rounded-2xl border border-stone-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+              Full thread ledger
+            </p>
+            <div className="mt-3 space-y-2">
+              {store.session_threads.length > 0 ? (
+                store.session_threads.map((thread) => (
+                  <div
+                    key={thread.threadKey}
+                    className="rounded-2xl border border-stone-200 bg-stone-50/70 px-3 py-2 text-sm text-stone-800"
+                  >
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                      {formatLabel(thread.sourceKind)} {thread.status} debt {thread.debtScore}
+                    </p>
+                    <p className="mt-1 leading-6">{thread.label}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-6 text-stone-600">
+                  No session threads yet.
+                </p>
+              )}
+            </div>
+          </article>
+        </div>
+      </details>
     </section>
   );
 }
