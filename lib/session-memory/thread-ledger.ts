@@ -1,4 +1,3 @@
-import type { TranscriptTurn } from "@/lib/schemas/transcript";
 import {
   type CanonicalTurn,
   sessionThreadSchema,
@@ -6,6 +5,7 @@ import {
   type SessionThread,
   type ThreadMention,
 } from "@/lib/session-memory/contracts";
+import { buildDebugTranscriptTurn } from "@/lib/session-memory/transcript-adapter";
 import { analyzeReplayCommittedTurn } from "@/lib/transcript/turn-analysis";
 import { extractReplayTurnMemory } from "@/lib/transcript/turn-memory";
 
@@ -21,23 +21,6 @@ const RESOLUTION_PHRASES = [
 
 function normalizeSearchText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function buildTranscriptTurn(canonicalTurn: CanonicalTurn): TranscriptTurn {
-  return {
-    id: canonicalTurn.id,
-    sessionId: canonicalTurn.sessionId,
-    timestamp: canonicalTurn.finalizedAt,
-    speaker: canonicalTurn.speaker ?? "guest",
-    text: canonicalTurn.text,
-    // Session-memory proof uses neutral defaults so extraction stays
-    // deterministic without inventing richer scoring semantics here.
-    energyScore: 0.5,
-    specificityScore: 0.5,
-    evasionScore: 0.15,
-    noveltyScore: 0.5,
-    threadIdLink: null,
-  };
 }
 
 function buildThreadKey(
@@ -69,9 +52,9 @@ function buildMentionRecords(
   canonicalTurn: CanonicalTurn,
   previousTurn: CanonicalTurn | null,
 ) {
-  const transcriptTurn = buildTranscriptTurn(canonicalTurn);
+  const transcriptTurn = buildDebugTranscriptTurn(canonicalTurn);
   const previousTranscriptTurn = previousTurn
-    ? buildTranscriptTurn(previousTurn)
+    ? buildDebugTranscriptTurn(previousTurn)
     : null;
   const analysis = analyzeReplayCommittedTurn(transcriptTurn, {
     previousTurn: previousTranscriptTurn,

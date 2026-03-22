@@ -30,6 +30,14 @@ export function SessionMemoryDebugPanel({
     sessionId: store.sessionId,
     mode: "unresolved_threads",
   });
+  const mostDroppedQuery = runSessionRetrievalQuery(store, {
+    sessionId: store.sessionId,
+    mode: "most_dropped_thread",
+  });
+  const reactivationQuery = runSessionRetrievalQuery(store, {
+    sessionId: store.sessionId,
+    mode: "reactivation_candidates",
+  });
   const latestTurn = store.session_turns.at(-1) ?? null;
 
   return (
@@ -128,7 +136,7 @@ export function SessionMemoryDebugPanel({
           Raw debug details
         </summary>
 
-        <div className="mt-4 grid gap-4 xl:grid-cols-3">
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
           <article className="rounded-2xl border border-stone-200 bg-white p-4">
             <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
               Raw transcript events
@@ -149,6 +157,35 @@ export function SessionMemoryDebugPanel({
               ) : (
                 <p className="text-sm leading-6 text-stone-600">
                   No transcript events captured yet.
+                </p>
+              )}
+            </div>
+          </article>
+
+          <article className="rounded-2xl border border-stone-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+              Canonical turns
+            </p>
+            <div className="mt-3 space-y-2">
+              {store.session_turns.length > 0 ? (
+                store.session_turns.map((turn) => (
+                  <div
+                    key={turn.id}
+                    className="rounded-2xl border border-stone-200 bg-stone-50/70 px-3 py-2 text-sm text-stone-800"
+                  >
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                      Turn {turn.sequence} {turn.speaker ?? "unknown"} finalized{" "}
+                      {turn.finalizedAt}
+                    </p>
+                    <p className="mt-1 leading-6">{turn.text}</p>
+                    <p className="mt-2 text-xs leading-5 text-stone-600">
+                      Source events: {turn.sourceEventIds.join(", ")}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-6 text-stone-600">
+                  No canonical turns finalized yet.
                 </p>
               )}
             </div>
@@ -191,7 +228,8 @@ export function SessionMemoryDebugPanel({
                     className="rounded-2xl border border-stone-200 bg-stone-50/70 px-3 py-2 text-sm text-stone-800"
                   >
                     <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
-                      {formatLabel(thread.sourceKind)} {thread.status} debt {thread.debtScore}
+                      {formatLabel(thread.sourceKind)} {thread.status} debt {thread.debtScore} drop{" "}
+                      {thread.dropScore}
                     </p>
                     <p className="mt-1 leading-6">{thread.label}</p>
                   </div>
@@ -201,6 +239,60 @@ export function SessionMemoryDebugPanel({
                   No session threads yet.
                 </p>
               )}
+            </div>
+          </article>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-3">
+          <article className="rounded-2xl border border-stone-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+              Retrieval: unresolved
+            </p>
+            <div className="mt-3 space-y-2">
+              {unresolvedQuery.basis.map((line) => (
+                <p key={line} className="text-xs leading-5 text-stone-600">
+                  {line}
+                </p>
+              ))}
+              {unresolvedQuery.threads.slice(0, 3).map((thread) => (
+                <p key={thread.threadKey} className="text-sm leading-6 text-stone-800">
+                  {thread.label}
+                </p>
+              ))}
+            </div>
+          </article>
+
+          <article className="rounded-2xl border border-stone-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+              Retrieval: most dropped
+            </p>
+            <div className="mt-3 space-y-2">
+              {mostDroppedQuery.basis.map((line) => (
+                <p key={line} className="text-xs leading-5 text-stone-600">
+                  {line}
+                </p>
+              ))}
+              <p className="text-sm leading-6 text-stone-800">
+                {mostDroppedQuery.threads[0]?.label ?? "No dropped thread yet."}
+              </p>
+            </div>
+          </article>
+
+          <article className="rounded-2xl border border-stone-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+              Retrieval: reactivation
+            </p>
+            <div className="mt-3 space-y-2">
+              {reactivationQuery.basis.map((line) => (
+                <p key={line} className="text-xs leading-5 text-stone-600">
+                  {line}
+                </p>
+              ))}
+              {reactivationCandidates.slice(0, 3).map((thread) => (
+                <p key={thread.threadKey} className="text-sm leading-6 text-stone-800">
+                  {thread.label}
+                </p>
+              ))}
             </div>
           </article>
         </div>

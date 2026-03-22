@@ -5,6 +5,7 @@ import {
   getReactivationCandidates,
   getTurnsForThread,
   getUnresolvedThreads,
+  runSessionRetrievalQuery,
 } from "@/lib/session-memory/build-session-memory-store";
 import type { RawTranscriptEvent } from "@/lib/session-memory/contracts";
 import { assembleCanonicalTurns } from "@/lib/session-memory/turn-assembly";
@@ -55,6 +56,10 @@ const mergedTurns = assembleCanonicalTurns(partialMergeEvents);
 assert.equal(mergedTurns.length, 1);
 assert.equal(mergedTurns[0]?.text, "His relapse made risk feel personal.");
 assert.deepEqual(mergedTurns[0]?.sourceEventIds, ["event-1", "event-2", "event-3"]);
+assert.match(
+  mergedTurns[0]?.id ?? "",
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4000-8000-[0-9a-f]{12}$/i,
+);
 
 const outOfOrderTurns = assembleCanonicalTurns([
   buildEvent(4, "Second finalized turn.", { utteranceKey: "speech-2" }),
@@ -93,6 +98,11 @@ assert.ok(unresolvedThreads.length > 0);
 assert.ok(
   unresolvedThreads.some((thread) => thread.label === "I changed my mind because"),
 );
+const unresolvedQuery = runSessionRetrievalQuery(threadStore, {
+  sessionId: SESSION_ID,
+  mode: "unresolved_threads",
+});
+assert.ok(unresolvedQuery.basis.length > 0);
 
 const interruptedOnlyStore = buildSessionMemoryStore(SESSION_ID, [
   buildEvent(1, "I changed my mind because", {
@@ -115,6 +125,15 @@ const interruptedTurns = getTurnsForThread(
 );
 assert.deepEqual(
   interruptedTurns.map((turn) => turn.text),
+  ["I changed my mind because"],
+);
+const mostDroppedQuery = runSessionRetrievalQuery(interruptedOnlyStore, {
+  sessionId: SESSION_ID,
+  mode: "most_dropped_thread",
+});
+assert.equal(mostDroppedQuery.threads[0]?.threadKey, mostDroppedThread!.threadKey);
+assert.deepEqual(
+  mostDroppedQuery.turns.map((turn) => turn.text),
   ["I changed my mind because"],
 );
 
@@ -141,5 +160,11 @@ assert.ok(
     (thread) => thread.label === "risk",
   ),
 );
+const reactivationQuery = runSessionRetrievalQuery(resolvedStore, {
+  sessionId: SESSION_ID,
+  mode: "reactivation_candidates",
+});
+assert.ok(reactivationQuery.basis.length > 0);
+assert.ok(!reactivationQuery.threads.some((thread) => thread.label === "risk"));
 
 console.log("Session memory contract passed.");

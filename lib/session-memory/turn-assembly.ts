@@ -16,7 +16,10 @@ type DraftAccumulator = {
   sourceEventIds: string[];
 };
 
-const CANONICAL_TURN_ID_PREFIX = "00000000-0000-4000-7000-";
+// Use stable UUID-shaped ids so assembled debug turns can link cleanly back
+// into existing transcript-oriented tooling without pretending they are
+// product-authored replay turns.
+const CANONICAL_TURN_ID_PREFIX = "00000000-0000-4000-8000-";
 
 function normalizeTranscript(value: string) {
   return value.replace(/\s+/g, " ").trim();

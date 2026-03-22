@@ -5,6 +5,22 @@ import {
   type SessionRetrievalQuery,
 } from "@/lib/session-memory/contracts";
 
+function buildRetrievalResult(
+  query: SessionRetrievalQuery,
+  basis: string[],
+  threads: SessionMemoryStore["session_threads"],
+  turns: CanonicalTurn[],
+  mentions: SessionMemoryStore["session_thread_mentions"],
+) {
+  return sessionRetrievalResultSchema.parse({
+    query,
+    basis,
+    threads,
+    turns,
+    mentions,
+  });
+}
+
 function getSessionThreads(store: SessionMemoryStore, sessionId: string) {
   return store.sessionId === sessionId ? store.session_threads : [];
 }
@@ -90,55 +106,66 @@ export function runSessionRetrievalQuery(
 
   switch (query.mode) {
     case "unresolved_threads":
-      return sessionRetrievalResultSchema.parse({
+      return buildRetrievalResult(
         query,
-        threads: getUnresolvedThreads(store, query.sessionId),
-        turns: [],
+        ["Returned open threads ranked by debt score, then drop score."],
+        getUnresolvedThreads(store, query.sessionId),
+        [],
         mentions,
-      });
+      );
     case "most_dropped_thread": {
       const thread = getMostDroppedThread(store, query.sessionId);
 
-      return sessionRetrievalResultSchema.parse({
+      return buildRetrievalResult(
         query,
-        threads: thread ? [thread] : [],
-        turns: thread ? getTurnsForThread(store, query.sessionId, thread.threadKey) : [],
+        [
+          "Selected the highest-ranked unresolved thread by drop score.",
+          "Returned the exact supporting turns linked to that thread key.",
+        ],
+        thread ? [thread] : [],
+        thread ? getTurnsForThread(store, query.sessionId, thread.threadKey) : [],
         mentions,
-      });
+      );
     }
     case "thread_by_key": {
       const thread = query.threadKey
         ? getThreadByKey(store, query.sessionId, query.threadKey)
         : null;
 
-      return sessionRetrievalResultSchema.parse({
+      return buildRetrievalResult(
         query,
-        threads: thread ? [thread] : [],
-        turns:
-          thread && query.threadKey
-            ? getTurnsForThread(store, query.sessionId, query.threadKey)
-            : [],
-        mentions,
-      });
-    }
-    case "reactivation_candidates":
-      return sessionRetrievalResultSchema.parse({
-        query,
-        threads: getReactivationCandidates(store, query.sessionId),
-        turns: [],
-        mentions,
-      });
-    case "turns_for_thread":
-      return sessionRetrievalResultSchema.parse({
-        query,
-        threads:
-          query.threadKey
-            ? [getThreadByKey(store, query.sessionId, query.threadKey)].filter(Boolean)
-            : [],
-        turns: query.threadKey
+        ["Performed exact thread-key lookup against the session thread ledger."],
+        thread ? [thread] : [],
+        thread && query.threadKey
           ? getTurnsForThread(store, query.sessionId, query.threadKey)
           : [],
         mentions,
-      });
+      );
+    }
+    case "reactivation_candidates":
+      return buildRetrievalResult(
+        query,
+        [
+          "Returned unresolved threads with positive drop score.",
+          "Cooling or resolved threads stay out of the reactivation list.",
+        ],
+        getReactivationCandidates(store, query.sessionId),
+        [],
+        mentions,
+      );
+    case "turns_for_thread":
+      const requestedThread = query.threadKey
+        ? getThreadByKey(store, query.sessionId, query.threadKey)
+        : null;
+
+      return buildRetrievalResult(
+        query,
+        ["Returned the canonical supporting turns for the requested thread key."],
+        requestedThread ? [requestedThread] : [],
+        query.threadKey
+          ? getTurnsForThread(store, query.sessionId, query.threadKey)
+          : [],
+        mentions,
+      );
   }
 }

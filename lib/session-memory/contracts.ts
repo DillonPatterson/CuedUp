@@ -2,6 +2,9 @@ import { z } from "zod";
 
 const sessionSpeakerSchema = z.enum(["host", "guest", "producer", "system"]);
 
+// Debug-ingestion-only event contract. These records describe what the sandbox
+// heard before the app intentionally commits anything into the replay turn
+// stream.
 export const rawTranscriptEventSchema = z.object({
   id: z.string().min(1),
   sessionId: z.string().min(1),
@@ -20,8 +23,13 @@ export const rawTranscriptEventSchema = z.object({
   speakerConfidence: z.number().min(0).max(1).nullable(),
 });
 
+// Debug-only assembled turn contract. This intentionally overlaps with the
+// product `TranscriptTurn` shape on id/session/text/timing/speaker, but it is
+// not the repo's canonical conversation truth. Its job is to preserve raw
+// transcript assembly linkage so the proof can explain which events produced a
+// stable turn.
 export const canonicalTurnSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().uuid(),
   sessionId: z.string().min(1),
   utteranceKey: z.string().min(1),
   sequence: z.number().int().nonnegative(),
@@ -79,6 +87,7 @@ export const sessionRetrievalQuerySchema = z.object({
 
 export const sessionRetrievalResultSchema = z.object({
   query: sessionRetrievalQuerySchema,
+  basis: z.array(z.string().min(1)).min(1),
   threads: z.array(sessionThreadSchema),
   turns: z.array(canonicalTurnSchema),
   mentions: z.array(threadMentionSchema),
