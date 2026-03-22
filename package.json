@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "state:replay": "tsx scripts/replay-conversation-state.ts",
+    "replay:session-memory-contract": "tsx scripts/verify-session-memory-contract.ts",
     "replay:selector-contract": "tsx scripts/verify-next-nudge-selector.ts",
     "replay:ingestion-contract": "tsx scripts/verify-replay-turn-normalization.ts",
     "replay:prove-checkpoints": "tsx scripts/prove-replay-checkpoints.ts"

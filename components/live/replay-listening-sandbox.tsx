@@ -10,6 +10,14 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import type { TranscriptTurn } from "@/types";
+import { SessionMemoryDebugPanel } from "@/components/live/session-memory-debug-panel";
+import {
+  buildSessionMemoryStore,
+} from "@/lib/session-memory/build-session-memory-store";
+import type {
+  RawTranscriptEvent,
+  RawTranscriptEvent as RawTranscriptEventType,
+} from "@/lib/session-memory/contracts";
 import type { ReplayTranscriptTurnDraft } from "@/lib/transcript/manual-turns";
 import {
   type BrowserSpeechRecognition,
@@ -51,6 +59,9 @@ type ListeningLastCommit = {
   turnCount: number;
   wordCount: number;
 };
+
+type SessionTranscriptEventSource =
+  RawTranscriptEventType["source"];
 
 const speakerOptions: TranscriptTurn["speaker"][] = [
   "host",
@@ -215,6 +226,10 @@ function createListeningSegment(
   };
 }
 
+function buildSessionEventId(sequence: number) {
+  return `session-event-${sequence.toString().padStart(6, "0")}`;
+}
+
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -316,10 +331,13 @@ export function ReplayListeningSandbox({
   const committedTranscriptRef = useRef("");
   const hydratedDraftRef = useRef(false);
   const startupRequestHandledRef = useRef<string | null>(null);
+  const rawEventSequenceRef = useRef(0);
   const [isListening, setIsListening] = useState(false);
+  const [activeUtteranceKey, setActiveUtteranceKey] = useState<string | null>(null);
   const [speaker, setSpeaker] = useState<TranscriptTurn["speaker"]>("guest");
   const [draftText, setDraftText] = useState("");
   const [segments, setSegments] = useState<ListeningSegment[]>([]);
+  const [rawEvents, setRawEvents] = useState<RawTranscriptEvent[]>([]);
   const [interimText, setInterimText] = useState("");
   const [commitMode, setCommitMode] =
     useState<ListeningCommitMode>("single_turn");
@@ -398,6 +416,36 @@ export function ReplayListeningSandbox({
     () => (livePreview ? buildIdeaSignals(livePreview.memory) : []),
     [livePreview],
   );
+  const currentPartialEvent = useMemo(() => {
+    const partialText = normalizeTranscript(interimText || draftText);
+    const nextSequence = (rawEvents.at(-1)?.sequence ?? 0) + 1;
+
+    if (!partialText) {
+      return null;
+    }
+
+    return {
+      id: "session-event-live-partial",
+      sessionId: engineSessionId,
+      utteranceKey: activeUtteranceKey ?? "draft-live",
+      source: interimText ? "sandbox_partial" : "stored_draft",
+      eventType: "partial",
+      sequence: nextSequence,
+      occurredAt: new Date().toISOString(),
+      text: partialText,
+      confidence: interimText ? 0.55 : 1,
+      speaker,
+      speakerConfidence: speaker ? 1 : null,
+    } satisfies RawTranscriptEvent;
+  }, [activeUtteranceKey, draftText, engineSessionId, interimText, rawEvents, speaker]);
+  const sessionMemoryStore = useMemo(
+    () =>
+      buildSessionMemoryStore(engineSessionId, [
+        ...rawEvents,
+        ...(currentPartialEvent ? [currentPartialEvent] : []),
+      ]),
+    [currentPartialEvent, engineSessionId, rawEvents],
+  );
   const lastHeardTimestampLabel = lastHeardAt
     ? new Date(lastHeardAt).toLocaleTimeString([], {
         hour: "numeric",
@@ -413,7 +461,49 @@ export function ReplayListeningSandbox({
         ? "Mic unavailable"
         : availability === "error"
           ? "Mic error"
-          : "Checking mic";
+        : "Checking mic";
+
+  function appendRawTranscriptEvent(
+    eventType: RawTranscriptEvent["eventType"],
+    source: SessionTranscriptEventSource,
+    text: string,
+    options: {
+      utteranceKey?: string;
+      confidence?: number | null;
+      speakerOverride?: TranscriptTurn["speaker"] | null;
+      speakerConfidence?: number | null;
+      occurredAt?: string;
+    } = {},
+  ) {
+    const normalizedText = normalizeTranscript(text);
+
+    if (!normalizedText) {
+      return;
+    }
+
+    rawEventSequenceRef.current += 1;
+    const utteranceKey =
+      options.utteranceKey ??
+      activeUtteranceKey ??
+      `utterance-${rawEventSequenceRef.current}`;
+
+    setRawEvents((currentEvents) => [
+      ...currentEvents,
+      {
+        id: buildSessionEventId(rawEventSequenceRef.current),
+        sessionId: engineSessionId,
+        utteranceKey,
+        source,
+        eventType,
+        sequence: rawEventSequenceRef.current,
+        occurredAt: options.occurredAt ?? new Date().toISOString(),
+        text: normalizedText,
+        confidence: options.confidence ?? null,
+        speaker: options.speakerOverride ?? speaker,
+        speakerConfidence: options.speakerConfidence ?? 1,
+      },
+    ]);
+  }
 
   useEffect(() => {
     committedTranscriptRef.current = draftText;
@@ -438,10 +528,29 @@ export function ReplayListeningSandbox({
       }
 
       committedTranscriptRef.current = storedDraft.draftText;
+      rawEventSequenceRef.current = storedDraft.segments.length;
       startTransition(() => {
         setSpeaker(storedDraft.speaker);
         setDraftText(storedDraft.draftText);
         setSegments(storedDraft.segments);
+        setRawEvents(
+          storedDraft.segments.map((segment, index) => ({
+            id: buildSessionEventId(index + 1),
+            sessionId: engineSessionId,
+            utteranceKey: segment.id,
+            source:
+              segment.source === "speech_final"
+                ? "sandbox_final"
+                : "stored_draft",
+            eventType: "final",
+            sequence: index + 1,
+            occurredAt: segment.createdAt,
+            text: segment.text,
+            confidence: segment.source === "speech_final" ? 0.75 : 1,
+            speaker: storedDraft.speaker,
+            speakerConfidence: 1,
+          })),
+        );
         setCommitMode(storedDraft.commitMode);
         setScoreMode(storedDraft.scoreMode);
         setCustomScores(storedDraft.customScores);
@@ -505,6 +614,7 @@ export function ReplayListeningSandbox({
   function clearRecognitionState() {
     recognitionRef.current?.abort?.();
     recognitionRef.current = null;
+    setActiveUtteranceKey(null);
     setIsListening(false);
     setInterimText("");
   }
@@ -546,13 +656,23 @@ export function ReplayListeningSandbox({
 
       const normalizedFinalChunk = normalizeTranscript(finalChunk);
       const normalizedInterimChunk = normalizeTranscript(interimChunk);
+      const heardAt = new Date().toISOString();
 
       if (normalizedFinalChunk) {
         const nextSegment = createListeningSegment(
           normalizedFinalChunk,
           "speech_final",
         );
+        const utteranceKey =
+          activeUtteranceKey ?? nextSegment.id;
+
         setSegments((currentSegments) => [...currentSegments, nextSegment]);
+        appendRawTranscriptEvent("final", "sandbox_final", normalizedFinalChunk, {
+          utteranceKey,
+          confidence: 0.75,
+          occurredAt: heardAt,
+        });
+        setActiveUtteranceKey(null);
         setDraftText((currentDraft) => {
           const nextDraft = appendToDraft(currentDraft, normalizedFinalChunk);
           committedTranscriptRef.current = nextDraft;
@@ -562,12 +682,22 @@ export function ReplayListeningSandbox({
           "Captured a finalized speech segment and appended it into the editable draft.",
         );
         setLastHeardText(normalizedFinalChunk);
-        setLastHeardAt(new Date().toISOString());
+        setLastHeardAt(heardAt);
       }
 
       if (normalizedInterimChunk) {
+        const utteranceKey =
+          activeUtteranceKey ??
+          `speech-live-${Date.now()}`;
+
+        setActiveUtteranceKey(utteranceKey);
+        appendRawTranscriptEvent("partial", "sandbox_partial", normalizedInterimChunk, {
+          utteranceKey,
+          confidence: 0.55,
+          occurredAt: heardAt,
+        });
         setLastHeardText(normalizedInterimChunk);
-        setLastHeardAt(new Date().toISOString());
+        setLastHeardAt(heardAt);
       }
 
       setInterimText(normalizedInterimChunk);
@@ -643,10 +773,17 @@ export function ReplayListeningSandbox({
       return;
     }
 
+    const nextSegment = createListeningSegment(normalizedDraft, "stored_draft");
+
     setSegments((currentSegments) => [
       ...currentSegments,
-      createListeningSegment(normalizedDraft, "stored_draft"),
+      nextSegment,
     ]);
+    appendRawTranscriptEvent("final", "stored_draft", normalizedDraft, {
+      utteranceKey: nextSegment.id,
+      confidence: 1,
+      occurredAt: nextSegment.createdAt,
+    });
     setDraftText("");
     committedTranscriptRef.current = "";
     setInterimText("");
@@ -676,6 +813,9 @@ export function ReplayListeningSandbox({
   function handleRemoveSegment(segmentId: string) {
     setSegments((currentSegments) =>
       currentSegments.filter((segment) => segment.id !== segmentId),
+    );
+    setRawEvents((currentEvents) =>
+      currentEvents.filter((event) => event.utteranceKey !== segmentId),
     );
     setStatusMessage(
       "Removed one captured segment. Rebuild the draft from segments if you want the editable draft to match the current segment list.",
@@ -719,6 +859,14 @@ export function ReplayListeningSandbox({
     }
 
     try {
+      if (commitMode === "single_turn") {
+        appendRawTranscriptEvent("final", "stored_draft", draftsToCommit[0]!.text, {
+          utteranceKey: activeUtteranceKey ?? `commit-${Date.now()}`,
+          confidence: 1,
+        });
+        setActiveUtteranceKey(null);
+      }
+
       onCommitDrafts(draftsToCommit);
       const wordCount = draftsToCommit.reduce(
         (total, draft) =>
@@ -764,7 +912,12 @@ export function ReplayListeningSandbox({
   }
 
   function handleClearSegments() {
+    const currentSegmentIds = new Set(segments.map((segment) => segment.id));
+
     setSegments([]);
+    setRawEvents((currentEvents) =>
+      currentEvents.filter((event) => !currentSegmentIds.has(event.utteranceKey)),
+    );
     setError(null);
     setStatusMessage("Cleared all captured segments.");
   }
@@ -782,6 +935,9 @@ export function ReplayListeningSandbox({
     setLastHeardText("");
     setLastHeardAt(null);
     setWasRestored(false);
+    setRawEvents([]);
+    rawEventSequenceRef.current = 0;
+    setActiveUtteranceKey(null);
     setStatusMessage("Cleared the entire sandbox session.");
     try {
       window.localStorage.removeItem(listeningDraftStorageKey(engineSessionId));
@@ -1068,6 +1224,10 @@ export function ReplayListeningSandbox({
             Start listening or type in the draft box to see live cue ideas and idea sorting before you commit anything.
           </p>
         )}
+      </div>
+
+      <div className="mt-5">
+        <SessionMemoryDebugPanel store={sessionMemoryStore} />
       </div>
 
       <div className="mt-5 flex flex-wrap gap-2">
