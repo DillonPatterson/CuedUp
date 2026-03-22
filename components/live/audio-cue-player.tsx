@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { AudioCueEvent } from "@/lib/live/audio-cue-engine";
 
 type AudioCuePlayerProps = {
@@ -14,10 +14,14 @@ export function AudioCuePlayer({
 }: AudioCuePlayerProps) {
   const lastRequestRef = useRef(0);
   const [status, setStatus] = useState("idle");
-  const isSupported =
-    typeof window !== "undefined" &&
-    typeof window.speechSynthesis !== "undefined" &&
-    typeof window.SpeechSynthesisUtterance !== "undefined";
+  const isSupported = useSyncExternalStore(
+    () => () => {},
+    () =>
+      typeof window !== "undefined" &&
+      typeof window.speechSynthesis !== "undefined" &&
+      typeof window.SpeechSynthesisUtterance !== "undefined",
+    () => false,
+  );
   const effectiveStatus = isSupported ? status : "unsupported";
 
   useEffect(() => {
