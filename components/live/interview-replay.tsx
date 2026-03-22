@@ -473,10 +473,10 @@ export function InterviewReplay({
           <div className="max-w-4xl">
             <p className="eyebrow">Replay/debug</p>
             <h2 className="mt-2 text-3xl font-semibold text-stone-900">
-              Debug transcript workspace
+              Simple transcript workspace
             </h2>
             <p className="mt-3 text-sm leading-6 text-stone-700">
-              Commit speech, inspect engine output.
+              Hear words, watch them organize, then inspect what matters.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -517,15 +517,25 @@ export function InterviewReplay({
 
       <AudioCuePlayer cue={audioCue} playRequest={audioPlayRequest} />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)] xl:items-start">
-        <ReplayListeningSandbox
-          engineSessionId={engineSessionId}
-          replaySourceLabel={replaySource.label}
-          lastCommittedTurn={replayLocalTurns.at(-1) ?? null}
-          onCommitDrafts={(drafts) => handleAppendDrafts(drafts, "sandbox commit")}
-        />
+      <ReplayListeningSandbox
+        engineSessionId={engineSessionId}
+        replaySourceLabel={replaySource.label}
+        lastCommittedTurn={replayLocalTurns.at(-1) ?? null}
+        onCommitDrafts={(drafts) => handleAppendDrafts(drafts, "sandbox commit")}
+      />
 
-        <div className="space-y-6 xl:sticky xl:top-6">
+      <section className="panel p-5">
+        <div className="max-w-3xl">
+          <p className="eyebrow">After commit</p>
+          <h3 className="mt-2 text-2xl font-semibold text-stone-900">
+            What the brain sees
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-stone-700">
+            Once you commit, replay shows the current turn and the single best next move.
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-6 lg:grid-cols-[1.55fr_0.95fr]">
           <ReplayCurrentTurn
             snapshot={currentSnapshot}
             currentTurnIndex={currentTurnIndex}
@@ -540,19 +550,24 @@ export function InterviewReplay({
           />
 
           <NextNudgeCandidatePanel
+            title="Best next move"
+            showBackups={false}
             selection={transcriptOrganization.nextNudge}
             footer={
-              <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+              <details className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+                <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-stone-500">
+                  Audio cue debug
+                </summary>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                      Replay audio cue (debug only)
+                      Replay audio cue
                     </p>
                     <p className="mt-2 text-lg font-semibold text-stone-900">
                       {audioCue?.text ?? "No audio cue ready"}
                     </p>
                     <p className="mt-1 text-xs leading-5 text-stone-500">
-                      Sandbox preview of the formatter output only.
+                      Sandbox formatter preview only.
                     </p>
                   </div>
                   <button
@@ -565,47 +580,41 @@ export function InterviewReplay({
                   </button>
                 </div>
                 {audioCue ? (
-                  <div className="mt-4">
-                    <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
-                      Formatter diagnostics
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-stone-600">
-                      <span className="rounded-full bg-stone-100 px-3 py-1">
-                        {audioCue.validation.wordCount} / {audioCue.validation.maxWordCount} words
-                      </span>
-                      <span className="rounded-full bg-stone-100 px-3 py-1">
-                        {audioCue.validation.bannedTerms.length === 0
-                          ? "Banned terms clear"
-                          : `Banned ${audioCue.validation.bannedTerms.join(", ")}`}
-                      </span>
-                      <span className="rounded-full bg-stone-100 px-3 py-1">
-                        {audioCue.validation.hasQuestionMark
-                          ? "Question mark present"
-                          : "Question mark clear"}
-                      </span>
-                      <span className="rounded-full bg-stone-100 px-3 py-1">
-                        {audioCue.validation.isEmpty
-                          ? "Cue empty"
-                          : audioCue.validation.isAwkwardlyLong
-                            ? "Length flagged"
-                            : "Length within cap"}
-                      </span>
-                    </div>
+                  <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-stone-600">
+                    <span className="rounded-full bg-stone-100 px-3 py-1">
+                      {audioCue.validation.wordCount} / {audioCue.validation.maxWordCount} words
+                    </span>
+                    <span className="rounded-full bg-stone-100 px-3 py-1">
+                      {audioCue.validation.bannedTerms.length === 0
+                        ? "Banned terms clear"
+                        : `Banned ${audioCue.validation.bannedTerms.join(", ")}`}
+                    </span>
+                    <span className="rounded-full bg-stone-100 px-3 py-1">
+                      {audioCue.validation.hasQuestionMark
+                        ? "Question mark present"
+                        : "Question mark clear"}
+                    </span>
+                    <span className="rounded-full bg-stone-100 px-3 py-1">
+                      {audioCue.validation.isEmpty
+                        ? "Cue empty"
+                        : audioCue.validation.isAwkwardlyLong
+                          ? "Length flagged"
+                          : "Length within cap"}
+                    </span>
                   </div>
                 ) : null}
-              </div>
+              </details>
             }
           />
         </div>
-      </div>
+      </section>
 
       <section className="panel p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="max-w-3xl">
             <p className="eyebrow">Engine detail</p>
             <p className="mt-2 text-sm leading-6 text-stone-700">
-              Keep the listening and sorting workspace in view by default. Open the
-              deeper thread, nudge, guard, and topic panels only when you need them.
+              Deeper thread, guard, and topic panels stay hidden unless you explicitly open them.
             </p>
           </div>
           <button
@@ -648,36 +657,7 @@ export function InterviewReplay({
               closureConfidence={currentSnapshot.conversationState.closureConfidence}
             />
           </div>
-        ) : (
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                Unresolved threads
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-stone-900">
-                {currentSnapshot.unresolvedThreads.length}
-              </p>
-            </article>
-            <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                Surfaced cue
-              </p>
-              <p className="mt-2 text-sm font-medium leading-6 text-stone-900">
-                {currentSnapshot.surfaceCue?.text ?? "No cue surfaced"}
-              </p>
-            </article>
-            <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-stone-500">
-                Guard outcome
-              </p>
-              <p className="mt-2 text-sm font-medium leading-6 text-stone-900">
-                {currentSnapshot.decisionLogEntry.formattedCue ??
-                  currentSnapshot.decisionLogEntry.candidateLabel ??
-                  currentSnapshot.decisionLogEntry.outcome}
-              </p>
-            </article>
-          </div>
-        )}
+        ) : null}
       </section>
     </div>
   );
