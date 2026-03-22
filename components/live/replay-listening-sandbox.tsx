@@ -230,6 +230,14 @@ function buildSessionEventId(sequence: number) {
   return `session-event-${sequence.toString().padStart(6, "0")}`;
 }
 
+function buildUtteranceKey(prefix: string) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.round(performance.now())}`;
+}
+
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -332,6 +340,7 @@ export function ReplayListeningSandbox({
   const hydratedDraftRef = useRef(false);
   const startupRequestHandledRef = useRef<string | null>(null);
   const rawEventSequenceRef = useRef(0);
+  const partialSnapshotByUtteranceRef = useRef(new Map<string, string>());
   const [isListening, setIsListening] = useState(false);
   const [activeUtteranceKey, setActiveUtteranceKey] = useState<string | null>(null);
   const [speaker, setSpeaker] = useState<TranscriptTurn["speaker"]>("guest");
@@ -356,6 +365,7 @@ export function ReplayListeningSandbox({
   const [lastHeardAt, setLastHeardAt] = useState<string | null>(null);
   const [wasRestored, setWasRestored] = useState(false);
   const [segmentsExpanded, setSegmentsExpanded] = useState(false);
+  const [ignoredEventCount, setIgnoredEventCount] = useState(0);
 
   const sessionState = error
     ? "Error"
@@ -416,35 +426,12 @@ export function ReplayListeningSandbox({
     () => (livePreview ? buildIdeaSignals(livePreview.memory) : []),
     [livePreview],
   );
-  const currentPartialEvent = useMemo(() => {
-    const partialText = normalizeTranscript(interimText || draftText);
-    const nextSequence = (rawEvents.at(-1)?.sequence ?? 0) + 1;
-
-    if (!partialText) {
-      return null;
-    }
-
-    return {
-      id: "session-event-live-partial",
-      sessionId: engineSessionId,
-      utteranceKey: activeUtteranceKey ?? "draft-live",
-      source: interimText ? "sandbox_partial" : "stored_draft",
-      eventType: "partial",
-      sequence: nextSequence,
-      occurredAt: new Date().toISOString(),
-      text: partialText,
-      confidence: interimText ? 0.55 : 1,
-      speaker,
-      speakerConfidence: speaker ? 1 : null,
-    } satisfies RawTranscriptEvent;
-  }, [activeUtteranceKey, draftText, engineSessionId, interimText, rawEvents, speaker]);
   const sessionMemoryStore = useMemo(
     () =>
-      buildSessionMemoryStore(engineSessionId, [
-        ...rawEvents,
-        ...(currentPartialEvent ? [currentPartialEvent] : []),
-      ]),
-    [currentPartialEvent, engineSessionId, rawEvents],
+      buildSessionMemoryStore(engineSessionId, rawEvents, {
+        ignoredEventCount,
+      }),
+    [engineSessionId, ignoredEventCount, rawEvents],
   );
   const lastHeardTimestampLabel = lastHeardAt
     ? new Date(lastHeardAt).toLocaleTimeString([], {
@@ -478,14 +465,38 @@ export function ReplayListeningSandbox({
     const normalizedText = normalizeTranscript(text);
 
     if (!normalizedText) {
+      setIgnoredEventCount((currentCount) => currentCount + 1);
       return;
     }
 
-    rawEventSequenceRef.current += 1;
     const utteranceKey =
       options.utteranceKey ??
       activeUtteranceKey ??
-      `utterance-${rawEventSequenceRef.current}`;
+      `utterance-${rawEventSequenceRef.current + 1}`;
+
+    if (eventType === "partial") {
+      const lastSnapshot = partialSnapshotByUtteranceRef.current.get(utteranceKey);
+
+      if (lastSnapshot === normalizedText) {
+        setIgnoredEventCount((currentCount) => currentCount + 1);
+        return;
+      }
+
+      if (
+        lastSnapshot &&
+        normalizedText.length < lastSnapshot.length &&
+        lastSnapshot.includes(normalizedText)
+      ) {
+        setIgnoredEventCount((currentCount) => currentCount + 1);
+        return;
+      }
+
+      partialSnapshotByUtteranceRef.current.set(utteranceKey, normalizedText);
+    } else {
+      partialSnapshotByUtteranceRef.current.delete(utteranceKey);
+    }
+
+    rawEventSequenceRef.current += 1;
 
     setRawEvents((currentEvents) => [
       ...currentEvents,
@@ -529,6 +540,7 @@ export function ReplayListeningSandbox({
 
       committedTranscriptRef.current = storedDraft.draftText;
       rawEventSequenceRef.current = storedDraft.segments.length;
+      partialSnapshotByUtteranceRef.current.clear();
       startTransition(() => {
         setSpeaker(storedDraft.speaker);
         setDraftText(storedDraft.draftText);
@@ -614,6 +626,7 @@ export function ReplayListeningSandbox({
   function clearRecognitionState() {
     recognitionRef.current?.abort?.();
     recognitionRef.current = null;
+    partialSnapshotByUtteranceRef.current.clear();
     setActiveUtteranceKey(null);
     setIsListening(false);
     setInterimText("");
@@ -683,12 +696,13 @@ export function ReplayListeningSandbox({
         );
         setLastHeardText(normalizedFinalChunk);
         setLastHeardAt(heardAt);
+        setInterimText("");
       }
 
       if (normalizedInterimChunk) {
         const utteranceKey =
           activeUtteranceKey ??
-          `speech-live-${Date.now()}`;
+          buildUtteranceKey("speech-live");
 
         setActiveUtteranceKey(utteranceKey);
         appendRawTranscriptEvent("partial", "sandbox_partial", normalizedInterimChunk, {
@@ -750,6 +764,8 @@ export function ReplayListeningSandbox({
   function handleStopListening() {
     recognitionRef.current?.stop?.();
     recognitionRef.current = null;
+    partialSnapshotByUtteranceRef.current.clear();
+    setActiveUtteranceKey(null);
     setIsListening(false);
     setInterimText("");
     setStatusMessage(
@@ -936,7 +952,9 @@ export function ReplayListeningSandbox({
     setLastHeardAt(null);
     setWasRestored(false);
     setRawEvents([]);
+    setIgnoredEventCount(0);
     rawEventSequenceRef.current = 0;
+    partialSnapshotByUtteranceRef.current.clear();
     setActiveUtteranceKey(null);
     setStatusMessage("Cleared the entire sandbox session.");
     try {

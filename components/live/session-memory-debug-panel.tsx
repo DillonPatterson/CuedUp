@@ -66,6 +66,72 @@ export function SessionMemoryDebugPanel({
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-3">
+        <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4 xl:col-span-3">
+          <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
+            Capture quality
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="rounded-2xl border border-stone-200 bg-white px-3 py-3">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                Raw events
+              </p>
+              <p className="mt-1 text-lg font-semibold text-stone-900">
+                {store.diagnostics.totalRawEvents}
+              </p>
+              <p className="text-xs leading-5 text-stone-600">
+                Finals {store.diagnostics.totalFinalEvents}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-stone-200 bg-white px-3 py-3">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                Canonical turns
+              </p>
+              <p className="mt-1 text-lg font-semibold text-stone-900">
+                {store.diagnostics.totalCanonicalTurns}
+              </p>
+              <p className="text-xs leading-5 text-stone-600">
+                Avg words {store.diagnostics.averageWordsPerCanonicalTurn}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-stone-200 bg-white px-3 py-3">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                Duplicate id prevention
+              </p>
+              <p className="mt-1 text-lg font-semibold text-stone-900">
+                {formatLabel(store.diagnostics.duplicateEventIdStatus)}
+              </p>
+              <p className="text-xs leading-5 text-stone-600">
+                Dropped {store.diagnostics.duplicateEventIdsDropped}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-stone-200 bg-white px-3 py-3">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                Merge pressure
+              </p>
+              <p className="mt-1 text-lg font-semibold text-stone-900">
+                {store.diagnostics.partialEventsMergedIntoFinals}
+              </p>
+              <p className="text-xs leading-5 text-stone-600">
+                Partials merged into turns
+              </p>
+            </div>
+            <div className="rounded-2xl border border-stone-200 bg-white px-3 py-3">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                Weak fragments
+              </p>
+              <p className="mt-1 text-lg font-semibold text-stone-900">
+                {store.diagnostics.veryShortFinalizedTurnCount}
+              </p>
+              <p className="text-xs leading-5 text-stone-600">
+                Longest turn {store.diagnostics.longestFinalizedTurnWords} words
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs leading-5 text-stone-600">
+            Ignored events {store.diagnostics.ignoredEventCount}. Raw event ids are unique per event. Utterance keys preserve partial-to-final lineage.
+          </p>
+        </article>
+
         <article className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
           <p className="text-xs uppercase tracking-[0.14em] text-stone-500">
             Stable turns
@@ -180,6 +246,12 @@ export function SessionMemoryDebugPanel({
                     <p className="mt-1 leading-6">{turn.text}</p>
                     <p className="mt-2 text-xs leading-5 text-stone-600">
                       Source events: {turn.sourceEventIds.join(", ")}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-stone-600">
+                      Utterance lineage: {turn.sourceUtteranceKeys.join(", ")}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-stone-600">
+                      Finalized via {formatLabel(turn.assemblyReason)}. Partials merged {turn.partialEventCount}. Final chunks {turn.finalEventCount}.
                     </p>
                   </div>
                 ))

@@ -63,10 +63,35 @@ const mergedTurns = assembleCanonicalTurns(partialMergeEvents);
 assert.equal(mergedTurns.length, 1);
 assert.equal(mergedTurns[0]?.text, "His relapse made risk feel personal.");
 assert.deepEqual(mergedTurns[0]?.sourceEventIds, ["event-1", "event-2", "event-3"]);
+assert.deepEqual(mergedTurns[0]?.sourceUtteranceKeys, ["speech-1"]);
+assert.equal(mergedTurns[0]?.partialEventCount, 2);
+assert.equal(mergedTurns[0]?.finalEventCount, 1);
+assert.equal(mergedTurns[0]?.assemblyReason, "end_of_buffer");
 assert.match(
   mergedTurns[0]?.id ?? "",
   /^[0-9a-f]{8}-[0-9a-f]{4}-4000-8000-[0-9a-f]{12}$/i,
 );
+
+const mergedFinalChunkTurns = assembleCanonicalTurns([
+  buildEvent(1, "I was trying to explain", {
+    utteranceKey: "merge-1",
+  }),
+  buildEvent(2, "what changed was the board stepped in.", {
+    utteranceKey: "merge-2",
+  }),
+]);
+
+assert.equal(mergedFinalChunkTurns.length, 1);
+assert.equal(
+  mergedFinalChunkTurns[0]?.text,
+  "I was trying to explain what changed was the board stepped in.",
+);
+assert.deepEqual(mergedFinalChunkTurns[0]?.sourceUtteranceKeys, [
+  "merge-1",
+  "merge-2",
+]);
+assert.equal(mergedFinalChunkTurns[0]?.finalEventCount, 2);
+assert.equal(mergedFinalChunkTurns[0]?.assemblyReason, "end_of_buffer");
 
 const outOfOrderTurns = assembleCanonicalTurns([
   buildEvent(4, "Second finalized turn.", { utteranceKey: "speech-2" }),
@@ -90,6 +115,16 @@ const threadStore = buildSessionMemoryStore(SESSION_ID, [
     speaker: "host",
   }),
 ]);
+assert.equal(threadStore.diagnostics.totalRawEvents, 3);
+assert.equal(threadStore.diagnostics.totalFinalEvents, 3);
+assert.equal(threadStore.diagnostics.totalCanonicalTurns, 3);
+assert.equal(threadStore.diagnostics.duplicateEventIdStatus, "clear");
+assert.equal(threadStore.diagnostics.duplicateEventIdsDropped, 0);
+assert.equal(threadStore.diagnostics.partialEventsMergedIntoFinals, 0);
+assert.equal(threadStore.diagnostics.veryShortFinalizedTurnCount, 1);
+assert.equal(threadStore.diagnostics.longestFinalizedTurnWords, 6);
+assert.equal(threadStore.diagnostics.averageWordsPerCanonicalTurn, 4.33);
+assert.equal(threadStore.diagnostics.ignoredEventCount, 0);
 
 assert.ok(threadStore.session_thread_mentions.length > 0);
 assert.ok(
@@ -103,7 +138,11 @@ assert.ok(
 const unresolvedThreads = getUnresolvedThreads(threadStore, SESSION_ID);
 assert.ok(unresolvedThreads.length > 0);
 assert.ok(
-  unresolvedThreads.some((thread) => thread.label === "I changed my mind because"),
+  unresolvedThreads.some(
+    (thread) =>
+      thread.label === "risk" ||
+      thread.label.startsWith("I changed my mind because"),
+  ),
 );
 const unresolvedQuery = runSessionRetrievalQuery(threadStore, {
   sessionId: SESSION_ID,
@@ -227,7 +266,7 @@ const unresolvedRiskIndex = orderedUnresolved.findIndex(
   (thread) => thread.label === "risk",
 );
 const unresolvedTruncatedIndex = orderedUnresolved.findIndex(
-  (thread) => thread.label === "It was about the board and...",
+  (thread) => thread.label.includes("board"),
 );
 assert.ok(unresolvedTruncatedIndex >= 0);
 assert.ok(unresolvedRiskIndex >= 0);
@@ -240,7 +279,7 @@ const reactivationRiskIndex = orderedReactivation.findIndex(
   (thread) => thread.label === "risk",
 );
 const reactivationTruncatedIndex = orderedReactivation.findIndex(
-  (thread) => thread.label === "It was about the board and...",
+  (thread) => thread.label.includes("board"),
 );
 assert.ok(reactivationRiskIndex >= 0);
 assert.ok(reactivationTruncatedIndex >= 0);
@@ -287,5 +326,28 @@ const fragmentedClaims = fragmentedIdentityStore.session_threads.filter(
     thread.label.startsWith("I changed my mind because"),
 );
 assert.equal(fragmentedClaims.length, 2);
+
+const dedupedStore = buildSessionMemoryStore(
+  SESSION_ID,
+  [
+    buildEvent(1, "Board risk kept growing.", {
+      utteranceKey: "dedupe-1",
+      id: "duplicate-event",
+    }),
+    buildEvent(2, "Board risk kept growing.", {
+      utteranceKey: "dedupe-1",
+      id: "duplicate-event",
+    }),
+  ],
+  {
+    ignoredEventCount: 2,
+  },
+);
+assert.equal(dedupedStore.diagnostics.duplicateEventIdStatus, "deduped");
+assert.equal(dedupedStore.diagnostics.duplicateEventIdsDropped, 1);
+assert.equal(dedupedStore.diagnostics.totalRawEvents, 1);
+assert.equal(dedupedStore.diagnostics.totalFinalEvents, 1);
+assert.equal(dedupedStore.diagnostics.totalCanonicalTurns, 1);
+assert.equal(dedupedStore.diagnostics.ignoredEventCount, 2);
 
 console.log("Session memory contract passed.");

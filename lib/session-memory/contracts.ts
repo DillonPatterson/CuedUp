@@ -1,10 +1,23 @@
 import { z } from "zod";
 
 const sessionSpeakerSchema = z.enum(["host", "guest", "producer", "system"]);
+const canonicalTurnAssemblyReasonSchema = z.enum([
+  "single_final",
+  "sentence_boundary",
+  "time_gap",
+  "speaker_change",
+  "length_cap",
+  "end_of_buffer",
+]);
+const duplicateEventStatusSchema = z.enum(["clear", "deduped"]);
 
 // Debug-ingestion-only event contract. These records describe what the sandbox
 // heard before the app intentionally commits anything into the replay turn
 // stream.
+//
+// `id` must be unique per raw event.
+// `utteranceKey` is the stable lineage key that ties together related partial
+// and final updates for the same heard utterance.
 export const rawTranscriptEventSchema = z.object({
   id: z.string().min(1),
   sessionId: z.string().min(1),
@@ -40,6 +53,10 @@ export const canonicalTurnSchema = z.object({
   speaker: sessionSpeakerSchema.nullable(),
   speakerConfidence: z.number().min(0).max(1).nullable(),
   sourceEventIds: z.array(z.string().min(1)).min(1),
+  sourceUtteranceKeys: z.array(z.string().min(1)).min(1),
+  partialEventCount: z.number().int().nonnegative(),
+  finalEventCount: z.number().int().positive(),
+  assemblyReason: canonicalTurnAssemblyReasonSchema,
 });
 
 export const threadMentionSchema = z.object({
@@ -101,6 +118,18 @@ export const sessionMemoryStoreSchema = z.object({
   session_turns: z.array(canonicalTurnSchema),
   session_thread_mentions: z.array(threadMentionSchema),
   session_threads: z.array(sessionThreadSchema),
+  diagnostics: z.object({
+    totalRawEvents: z.number().int().nonnegative(),
+    totalFinalEvents: z.number().int().nonnegative(),
+    totalCanonicalTurns: z.number().int().nonnegative(),
+    duplicateEventIdStatus: duplicateEventStatusSchema,
+    duplicateEventIdsDropped: z.number().int().nonnegative(),
+    averageWordsPerCanonicalTurn: z.number().nonnegative(),
+    veryShortFinalizedTurnCount: z.number().int().nonnegative(),
+    partialEventsMergedIntoFinals: z.number().int().nonnegative(),
+    longestFinalizedTurnWords: z.number().int().nonnegative(),
+    ignoredEventCount: z.number().int().nonnegative(),
+  }),
 });
 
 export type RawTranscriptEvent = z.infer<typeof rawTranscriptEventSchema>;
